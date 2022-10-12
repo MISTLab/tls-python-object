@@ -4,9 +4,12 @@ logging.basicConfig(level=logging.INFO)
 import math
 import pickle as pkl
 from multiprocessing import Process, Pipe
+from socket import socket, AF_INET, SOCK_STREAM
 
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.endpoints import TCP4ServerEndpoint
+
+from local_protocol import LocalProtocolForServerFactory
 
 
 class ServerProtocol(Protocol):
@@ -109,21 +112,32 @@ class ServerProtocolFactory(Factory):
 
 
 class Server:
-    def __init__(self, port, password, accepted_groups=None, header_size=10):
+    def __init__(self, port, password, accepted_groups=None, header_size=10, local_com_port=2097):
         self._port = port
+        self._local_com_port = local_com_port
+        assert self._local_com_port != self._port, f"Internet and local ports are the same ({self._port})."
         self.password = password
         self.header_size = header_size
         self._accepted_groups = accepted_groups
         self.clients = {}  # dict of identifiers to clients
         self.groups = {}  # dictionary of groups to lists of clients idxs within each group
         self._id_cpt = 0
+        self.reactor = None
 
-    def run(self, pipe):
-        # TODO: isolate this in a process
+    def run(self):
+        """
+        Main loop containing the reactor loop.
+
+        This is run in its own process.
+        """
+        from twisted.internet.interfaces import IReadDescriptor
         from twisted.internet import reactor
+
         endpoint = TCP4ServerEndpoint(reactor, self._port)
         endpoint.listen(ServerProtocolFactory(self))  # we pass the instance of Server to the Factory
-        reactor.run()  # main Twisted reactor loop
+        reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForServerFactory(self))
+        self.reactor = reactor
+        self.reactor.run()  # main Twisted reactor loop
 
     def add_accepted_group(self, group, max_count=math.inf):
         """
@@ -135,6 +149,7 @@ class Server:
         if self._accepted_groups is None:
             self._accepted_groups = {}
         self._accepted_groups[group] = {'max_count': max_count}
+        self._accepted_groups['__server'] = {'max_count': 1}
 
     def check_new_client(self, groups):
         """
@@ -180,16 +195,33 @@ class Server:
 
 
 class CentralRelay:
-    def __init__(self, port, password, accepted_groups=None):
-        self._pipe = Pipe()
-        self._server = Server(port=port, password=password, accepted_groups=accepted_groups)
-        self._p = Process(target=self._server.run, args=(self._pipe, ))
+    def __init__(self, port, password, accepted_groups=None, local_com_port=2097, header_size=10):
+        self._header_size = header_size
+        self._local_com_port = local_com_port
+        self._local_com_srv = socket(AF_INET, SOCK_STREAM)
+        self._local_com_srv.bind(('127.0.0.1', self._local_com_port))
+        self._local_com_srv.listen()
+        self._server = Server(port=port,
+                              password=password,
+                              accepted_groups=accepted_groups,
+                              local_com_port=local_com_port,
+                              header_size=header_size)
+        self._p = Process(target=self._server.run, args=())
         self._p.start()
+        self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
 
     def stop(self):
+        msg = pkl.dumps(('STOP', None))
+        msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
+        self._local_com_conn.sendall(msg)
+
         self._p.join()
+        self._local_com_conn.close()
+        self._local_com_addr = None
 
 
 if __name__ == "__main__":
+    import time
     relay = CentralRelay(port=8123, password="pswd", accepted_groups=None)
+    time.sleep(10)
     relay.stop()
