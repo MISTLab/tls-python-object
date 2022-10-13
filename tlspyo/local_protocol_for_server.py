@@ -10,8 +10,6 @@ class LocalProtocolForServer(Protocol):
         self._server = server
         self._state = "INIT"
         self._buffer = b""
-        self._password = self._server.password
-        self._len_password = len(bytes(self._password, encoding='utf8'))
         self._header_size = self._server.header_size
         self._identifier = None
 

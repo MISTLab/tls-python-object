@@ -48,7 +48,7 @@ class ClientProtocol(Protocol):
                     self.send_obj(cmd='HELLO', obj=self._groups)
                     self._state = "ALIVE"
                 elif cmd == "OBJ":
-                    logging.info(f"Received object, transferring to local EndPoint.")
+                    logging.debug(f"Received object, transferring to local EndPoint.")
                     # transfer the object to the EndPoint server
                     if self._client.endpoint is not None:
                         self._client.endpoint.transport.write(data=self._buffer[:j])
@@ -119,51 +119,6 @@ class Client:
     def close(self):
         if self._reactor is not None:
             self._reactor.stop()
-
-
-class EndPoint:
-    def __init__(self, ip_server, port_server, password, groups=None, local_com_port=2097, header_size=10):
-
-        # threading for local object receiving
-        self.__obj_buffer = []
-        self.__obj_buffer_lock = Lock()
-
-        # networking (local and internet)
-        if isinstance(groups, str):
-            groups = (groups, )
-        self._header_size = header_size
-        self._local_com_port = local_com_port
-        self._local_com_srv = socket(AF_INET, SOCK_STREAM)
-        self._client = Client(ip_server=ip_server,
-                              port_server=port_server,
-                              password=password,
-                              groups=groups,
-                              local_com_port=local_com_port,
-                              header_size=header_size)
-
-        # start local server and Twisted process
-        self._local_com_srv.bind(('127.0.0.1', self._local_com_port))
-        self._local_com_srv.listen()
-        self._p = Process(target=self._client.run, args=())
-        self._p.start()
-        self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
-
-    def _send_local(self, cmd, dest, obj):
-        msg = pkl.dumps((cmd, dest, obj))
-        msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-        self._local_com_conn.sendall(msg)
-
-    def send_object(self, obj, destination):
-        self._send_local(self, cmd='OBJ', dest=destination, obj=obj)
-
-    def stop(self):
-        # send STOP to the local server
-        self._send_local(self, cmd='STOP', dest=None, obj=None)
-
-        # join Twisted process and stop local server
-        self._p.join()
-        self._local_com_conn.close()
-        self._local_com_addr = None
 
 
 if __name__ == "__main__":

@@ -10,8 +10,6 @@ class LocalProtocolForClient(Protocol):
         self._client = client
         self._state = "INIT"
         self._buffer = b""
-        self._password = self._client.password
-        self._len_password = len(bytes(self._password, encoding='utf8'))
         self._header_size = self._client.header_size
         self._identifier = None
 

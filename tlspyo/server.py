@@ -59,6 +59,8 @@ class ServerProtocol(Protocol):
                     return
                 while len(self._buffer) >= j:
                     cmd, dest, obj = pkl.loads(self._buffer[i:j])
+                    if isinstance(dest, str):
+                        dest = (dest, )
                     if cmd == "OBJ":
                         logging.info(f"Received object from client {self._identifier} for groups {dest}.")
                         self.forward_obj_to_groups(obj=obj, groups=dest)
@@ -101,6 +103,7 @@ class ServerProtocol(Protocol):
                 for g, ids in self._server.groups.items():
                     if g == group:
                         for id_cli in ids:
+                            logging.info(f"Sending object to identifier {id_cli}.")
                             self._server.clients[id_cli].send_obj(cmd='OBJ', obj=obj)
 
 
@@ -208,35 +211,5 @@ class Server:
             self._reactor = None
 
 
-class CentralRelay:
-    def __init__(self, port, password, accepted_groups=None, local_com_port=2097, header_size=10):
-        self._header_size = header_size
-        self._local_com_port = local_com_port
-        self._local_com_srv = socket(AF_INET, SOCK_STREAM)
-        self._local_com_srv.bind(('127.0.0.1', self._local_com_port))
-        self._local_com_srv.listen()
-        self._server = Server(port=port,
-                              password=password,
-                              accepted_groups=accepted_groups,
-                              local_com_port=local_com_port,
-                              header_size=header_size)
-        self._p = Process(target=self._server.run, args=())
-        self._p.start()
-        self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
-
-    def stop(self):
-        msg = pkl.dumps(('STOP', None))
-        msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-        self._local_com_conn.sendall(msg)
-
-        self._p.join()
-        self._local_com_conn.close()
-        self._local_com_addr = None
-
-
 if __name__ == "__main__":
-    import time
-    relay = CentralRelay(port=8123, password="pswd", accepted_groups=None)
-    time.sleep(5)
-    # relay.stop()
-    # time.sleep(1)
+    pass
