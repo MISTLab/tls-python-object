@@ -3,7 +3,7 @@ logging.basicConfig(level=logging.INFO)
 
 import math
 import pickle as pkl
-from multiprocessing import Process, Pipe
+from multiprocessing import Process
 from socket import socket, AF_INET, SOCK_STREAM
 
 from twisted.internet.protocol import Protocol, Factory
@@ -64,6 +64,10 @@ class ServerProtocol(Protocol):
                         self.forward_obj_to_groups(obj=obj, groups=dest)
                     elif cmd == "HELLO":
                         groups = obj
+                        if isinstance(groups, str):
+                            groups = (groups, )
+                        elif groups is None:
+                            groups = ('__default', )
                         if self._server.check_new_client(groups=groups):
                             logging.info(f"New client with groups {groups}.")
                             self._identifier = self._server.add_client(groups=groups, client=self)
@@ -84,6 +88,7 @@ class ServerProtocol(Protocol):
             logging.info(f"Unhandled exception: {e}")
             self._state = "KILLED"
             self.transport.abortConnection()
+            raise e
 
     def send_obj(self, cmd='OBJ', obj=None):
         msg = pkl.dumps((cmd, obj))
@@ -122,7 +127,7 @@ class Server:
         self.clients = {}  # dict of identifiers to clients
         self.groups = {}  # dictionary of groups to lists of clients idxs within each group
         self._id_cpt = 0
-        self.reactor = None
+        self._reactor = None
 
     def run(self):
         """
@@ -136,8 +141,8 @@ class Server:
         endpoint = TCP4ServerEndpoint(reactor, self._port)
         endpoint.listen(ServerProtocolFactory(self))  # we pass the instance of Server to the Factory
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForServerFactory(self))
-        self.reactor = reactor
-        self.reactor.run()  # main Twisted reactor loop
+        self._reactor = reactor
+        self._reactor.run()  # main Twisted reactor loop
 
     def add_accepted_group(self, group, max_count=math.inf):
         """
@@ -193,6 +198,15 @@ class Server:
     def has_client(self, identifier):
         return identifier in self.clients
 
+    def close(self):
+        if self._reactor is not None:
+            identifiers = list(self.clients.keys())
+            for identifier in identifiers:
+                self.clients[identifier].transport.loseConnection()
+                self.delete_client(identifier)
+            self._reactor.stop()
+            self._reactor = None
+
 
 class CentralRelay:
     def __init__(self, port, password, accepted_groups=None, local_com_port=2097, header_size=10):
@@ -223,5 +237,6 @@ class CentralRelay:
 if __name__ == "__main__":
     import time
     relay = CentralRelay(port=8123, password="pswd", accepted_groups=None)
-    time.sleep(10)
-    relay.stop()
+    time.sleep(5)
+    # relay.stop()
+    # time.sleep(1)
