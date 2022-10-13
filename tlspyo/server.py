@@ -9,7 +9,7 @@ from socket import socket, AF_INET, SOCK_STREAM
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.endpoints import TCP4ServerEndpoint
 
-from local_protocol import LocalProtocolForServerFactory
+from local_protocol_for_server import LocalProtocolForServerFactory
 
 
 class ServerProtocol(Protocol):
