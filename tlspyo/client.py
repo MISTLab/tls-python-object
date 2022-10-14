@@ -1,13 +1,8 @@
 import logging
-logging.basicConfig(level=logging.INFO)
-
 import pickle as pkl
-from multiprocessing import Process
-from threading import Thread, Lock
-from socket import socket, AF_INET, SOCK_STREAM
+import time
 
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
-
 from local_protocol_for_client import LocalProtocolForClientFactory
 
 
@@ -43,24 +38,46 @@ class ClientProtocol(Protocol):
         if len(self._buffer) >= self._header_size:
             i, j = self.process_header()
             while len(self._buffer) >= j:
-                cmd, obj = pkl.loads(self._buffer[i:j])
-                if cmd == "HELLO":
-                    self.send_obj(cmd='HELLO', obj=self._groups)
-                    self._state = "ALIVE"
-                elif cmd == "OBJ":
-                    logging.debug(f"Received object, transferring to local EndPoint.")
-                    # transfer the object to the EndPoint server
-                    if self._client.endpoint is not None:
-                        self._client.endpoint.transport.write(data=self._buffer[:j])
-                    else:
-                        logging.warning(f"Local EndPoint is not connected, discarding object.")
+                # print(f"i:{i}, j:{j}, MSG: {self._buffer[i:j]}")
+                stamp, cmd, obj = pkl.loads(self._buffer[i:j])
+                if cmd == 'ACK':
+                    try:
+                        del self._client.pending_acks[stamp]  # delete pending ACK
+                    except KeyError:
+                        logging.warning(f"Received ACK for stamp {stamp} not present in pending ACKs.")
+                else:
+                    self.send_ack(stamp)  # send ACK
+                    if cmd == "HELLO":
+                        self.send_obj(cmd='HELLO', obj=self._groups)
+                        self._state = "ALIVE"
+                        while len(self._client.store) > 0:
+                            # send buffered commands to the server
+                            cmd, dest, obj = self._client.store[0]
+                            self.send_obj(cmd=cmd, dest=dest, obj=obj)  # send buffered command
+                            self._client.store = self._client.store[1:]  # remove buffered command from store
+                    elif cmd == "OBJ":
+                        logging.debug(f"Received object, transferring to local EndPoint.")
+                        # transfer the object to the EndPoint server
+                        if self._client.endpoint is not None:
+                            self._client.endpoint.transport.write(data=self._buffer[:j])
+                        else:
+                            logging.warning(f"Local EndPoint is not connected, discarding object.")
                 # truncate the processed part of the buffer:
                 self._buffer = self._buffer[j:]
                 i, j = self.process_header()
 
     def send_obj(self, cmd='OBJ', dest=None, obj=None):
-        msg = pkl.dumps((cmd, dest, obj))
+        self._client.ack_stamp += 1
+        msg = pkl.dumps((self._client.ack_stamp, cmd, dest, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
+        self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
+        # print(f"sending OBJ msg: {msg}")
+        self.transport.write(data=msg)
+
+    def send_ack(self, stamp):
+        msg = pkl.dumps((stamp, 'ACK', None, None))
+        msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
+        # print(f"sending ACK msg: {msg}")
         self.transport.write(data=msg)
 
 
@@ -101,6 +118,9 @@ class Client:
         self._reactor = None
         self.server = None  # to communicate with the central relay
         self.endpoint = None  # to communicate with endpoint
+        self.store = []
+        self.ack_stamp = 0
+        self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
 
     def run(self):
         """

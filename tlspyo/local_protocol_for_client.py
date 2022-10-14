@@ -39,7 +39,8 @@ class LocalProtocolForClient(Protocol):
                         if self._client.server is not None:
                             self._client.server.send_obj(cmd='OBJ', dest=dest, obj=obj_bytes)
                         else:
-                            logging.warning('The client is not connected to the internet server, discarding object.')
+                            logging.warning('The client is not connected to the internet server, storing message.')
+                            self._client.store.append(('OBJ', dest, obj_bytes))
                     else:
                         logging.info(f"Local: Invalid command: {cmd}")
                         self._state = "CLOSED"
@@ -52,11 +53,6 @@ class LocalProtocolForClient(Protocol):
             self._state = "KILLED"
             self.transport.abortConnection()
             raise e
-
-    # def send_obj(self, cmd='OBJ', obj=None):
-    #     msg = pkl.dumps((cmd, obj))
-    #     msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-    #     self.transport.write(data=msg)
 
     def process_header(self):
         i = self._header_size

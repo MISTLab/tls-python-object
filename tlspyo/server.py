@@ -1,10 +1,8 @@
 import logging
-logging.basicConfig(level=logging.INFO)
-
 import math
 import pickle as pkl
-from multiprocessing import Process
-from socket import socket, AF_INET, SOCK_STREAM
+import time
+from collections import deque
 
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.endpoints import TCP4ServerEndpoint
@@ -58,29 +56,38 @@ class ServerProtocol(Protocol):
                 if self._state == "KILLED":
                     return
                 while len(self._buffer) >= j:
-                    cmd, dest, obj = pkl.loads(self._buffer[i:j])
-                    if isinstance(dest, str):
-                        dest = (dest, )
-                    if cmd == "OBJ":
-                        logging.info(f"Received object from client {self._identifier} for groups {dest}.")
-                        self.forward_obj_to_groups(obj=obj, groups=dest)
-                    elif cmd == "HELLO":
-                        groups = obj
-                        if isinstance(groups, str):
-                            groups = (groups, )
-                        elif groups is None:
-                            groups = ('__default', )
-                        if self._server.check_new_client(groups=groups):
-                            logging.info(f"New client with groups {groups}.")
-                            self._identifier = self._server.add_client(groups=groups, client=self)
-                            self._state = "ALIVE"
+                    # print(f"i:{i}, j:{j}, MSG: {self._buffer[i:j]}")
+                    stamp, cmd, dest, obj = pkl.loads(self._buffer[i:j])
+                    if cmd == 'ACK':
+                        try:
+                            del self._server.pending_acks[stamp]  # delete pending ACK
+                        except KeyError:
+                            logging.warning(f"Received ACK for stamp {stamp} not present in pending ACKs.")
+                    else:
+                        self.send_ack(stamp)  # send ACK
+                        if isinstance(dest, str):
+                            dest = (dest, )
+                        if cmd == "OBJ":
+                            logging.info(f"Received object from client {self._identifier} for groups {dest}.")
+                            self.forward_obj_to_dest(obj=obj, dest=dest)
+                        elif cmd == "HELLO":
+                            groups = obj
+                            if isinstance(groups, str):
+                                groups = (groups, )
+                            # elif groups is None:
+                            #     groups = ('__default', )  # FIXME: maybe remove this as this may be a security concern
+                            if self._server.check_new_client(groups=groups):
+                                logging.info(f"New client with groups {groups}.")
+                                self._identifier = self._server.add_client(groups=groups, client=self)
+                                self._state = "ALIVE"
+                                self.retrieve_broadcast()
+                            else:
+                                self._state = "CLOSED"
+                                self.transport.loseConnection()
                         else:
+                            logging.info(f"Invalid command: {cmd}")
                             self._state = "CLOSED"
                             self.transport.loseConnection()
-                    else:
-                        logging.info(f"Invalid command: {cmd}")
-                        self._state = "CLOSED"
-                        self.transport.loseConnection()
                     # truncate the processed part of the buffer:
                     self._buffer = self._buffer[j:]
                     i, j, psw = self.process_header()
@@ -93,18 +100,45 @@ class ServerProtocol(Protocol):
             raise e
 
     def send_obj(self, cmd='OBJ', obj=None):
-        msg = pkl.dumps((cmd, obj))
+        self._server.ack_stamp += 1
+        msg = pkl.dumps((self._server.ack_stamp, cmd, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
+        self._server.pending_acks[self._server.ack_stamp] = (time.monotonic(), msg)
+        # print(f"sending OBJ msg: {msg}")
         self.transport.write(data=msg)
 
-    def forward_obj_to_groups(self, obj, groups):
-        if groups is not None:
-            for group in groups:
-                for g, ids in self._server.groups.items():
-                    if g == group:
+    def send_ack(self, stamp):
+        msg = pkl.dumps((stamp, 'ACK', None))
+        msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
+        # print(f"sending ACK msg: {msg}")
+        self.transport.write(data=msg)
+
+    def retrieve_broadcast(self):
+        if self._identifier is not None:
+            for _, d_group in self._server.group_info.items():
+                if self._identifier in d_group['ids']:
+                    to_broadcast = d_group['to_broadcast']
+                    if to_broadcast is not None:
+                        self.send_obj(cmd='OBJ', obj=to_broadcast)
+
+    def forward_obj_to_dest(self, obj, dest):
+        if dest is not None:
+            assert isinstance(dest, dict), f"destination is a {type(dest)}; must be a dict."
+            for group, value in dest.items():
+                if group in self._server.group_info.keys():
+                    d_g = self._server.group_info[group]
+                    if value < 0:
+                        # broadcast object to group
+                        d_g['to_broadcast'] = obj
+                        ids = d_g['ids']
                         for id_cli in ids:
                             logging.info(f"Sending object to identifier {id_cli}.")
                             self._server.clients[id_cli].send_obj(cmd='OBJ', obj=obj)
+                    elif value > 0:
+                        # add object to group's consumables
+                        for _ in range(value):
+                            d_g['to_consume'].append(obj)
+                            # TODO: add notify() logic from Endpoints to retrieve a consumable from the Server
 
 
 class ServerProtocolFactory(Factory):
@@ -128,8 +162,10 @@ class Server:
         self.header_size = header_size
         self._accepted_groups = accepted_groups
         self.clients = {}  # dict of identifiers to clients
-        self.groups = {}  # dictionary of groups to lists of clients idxs within each group
+        self.group_info = {}  # dictionary of group names to dicts of group info
         self._id_cpt = 0
+        self.ack_stamp = 0
+        self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
         self._reactor = None
 
     def run(self):
@@ -171,9 +207,9 @@ class Server:
                 if group not in self._accepted_groups.keys():
                     logging.info(f"Invalid group {group}.")
                     return False
-                if group in self.groups.keys():
+                if group in self.group_info.keys():
                     max_count = self._accepted_groups[group]['max_count']
-                    if len(self.groups[group]) >= max_count:
+                    if len(self.group_info[group]['ids']) >= max_count:
                         logging.info(f"Cannot add more clients to group {group}.")
                         return False
         return True
@@ -184,14 +220,20 @@ class Server:
         logging.info(f"Adding client {identifier} to list of clients.")
         self.clients[identifier] = client
         for group in groups:
-            if group not in self.groups.keys():
-                self.groups[group] = []
+            self.add_group(group)
             logging.info(f"Adding client {identifier} to group {group}.")
-            self.groups[group].append(identifier)
+            self.group_info[group]['ids'].append(identifier)
         return identifier
 
+    def add_group(self, group, max_consumables=100):  # FIXME: set limit programatically
+        if group not in self.group_info.keys():
+            self.group_info[group] = {'ids': [],
+                                      'to_broadcast': None,
+                                      'to_consume': deque(maxlen=max_consumables)}
+
     def delete_client(self, identifier):
-        for group, idents in self.groups.items():
+        for group, d_group in self.group_info.items():
+            idents = d_group['ids']
             if identifier in idents:
                 logging.info(f"Removing client {identifier} from group {group}.")
                 idents.remove(identifier)

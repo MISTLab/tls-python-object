@@ -73,7 +73,7 @@ class Endpoint:
             buf += self._local_com_conn.recv(4096)
             i, j = self._process_header(buf)
             if j <= len(buf):
-                cmd, obj = pkl.loads(buf[i:j])
+                stamp, cmd, obj = pkl.loads(buf[i:j])
                 if cmd == "OBJ":
                     with self.__obj_buffer_lock:
                         self.__obj_buffer.append(pkl.loads(obj))
@@ -93,6 +93,33 @@ class Endpoint:
         self._local_com_conn.sendall(msg)
 
     def send_object(self, obj, destination):
+        """
+        Either broadcast object to destination group(s) or send it as a consumable.
+
+        obj can be any picklable python object.
+        destination can either be:
+            - a string (single group)
+            - a tuple of strings (set of groups)
+            - a dictionary where keys are strings (group) and values are integers (number of copies for the group)
+
+        When destination is a string or a tuple of strings, the object will be broadcast to corresponding group(s).
+        When destination is a dictionary, each key is a destination group. For each corresponding value:
+            - If the value is N < 0, the object is broadcast to the group.
+            - If the value is N > 0, N objects are sent to the group to be consumed. To consume an object, the Endpoint
+                first needs to signal itself as idle for the corresponding group with Endpoint.notify().
+
+        :param obj: object: picklable object to broadcast to destination
+        :param destination: object: destination group(s)
+        """
+        if isinstance(destination, str):
+            destination = {destination: -1}
+        elif isinstance(destination, tuple) or isinstance(destination, list):
+            destination = {dest: -1 for dest in destination}
+        else:
+            assert isinstance(destination, dict), f"destination must be either of: str, (str), dict."
+            for k, v in destination.items():
+                assert isinstance(k, str), f"destination keys must be strings."
+                assert isinstance(v, int), f"destination values must be integers."
         self._send_local(cmd='OBJ', dest=destination, obj=obj)
 
     def stop(self):
@@ -168,10 +195,10 @@ if __name__ == '__main__':
                       local_com_port=args.local_port)
         cpt = 1
         while True:
-            obj = 'salut' + str(cpt)
+            obj_s = 'salut' + str(cpt)
             cpt += 1
-            dest = "3001" if args.local_port == 3000 else "3000"
-            ep.send_object(obj, destination=dest)
+            dest_s = "3001" if args.local_port == 3000 else "3000"
+            ep.send_object(obj_s, destination=dest_s)
 
             print(ep.receive_all())
             time.sleep(2)
