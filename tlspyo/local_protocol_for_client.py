@@ -34,13 +34,13 @@ class LocalProtocolForClient(Protocol):
                         logging.info(f"Local: Stopping reactor.")
                         self._client.close()
                         logging.info(f"Local: Reactor stopped.")
-                    elif cmd == "OBJ":
+                    elif cmd in ("OBJ", "NTF"):
                         # send the object to the central relay
                         if self._client.server is not None:
-                            self._client.server.send_obj(cmd='OBJ', dest=dest, obj=obj_bytes)
+                            self._client.server.send_obj(cmd=cmd, dest=dest, obj=obj_bytes)
                         else:
                             logging.warning('The client is not connected to the internet server, storing message.')
-                            self._client.store.append(('OBJ', dest, obj_bytes))
+                            self._client.store.append((cmd, dest, obj_bytes))
                     else:
                         logging.info(f"Local: Invalid command: {cmd}")
                         self._state = "CLOSED"

@@ -122,6 +122,45 @@ class Endpoint:
                 assert isinstance(v, int), f"destination values must be integers."
         self._send_local(cmd='OBJ', dest=destination, obj=obj)
 
+    def produce(self, obj, group):
+        """
+        Alias for send_object(obj=obj, destination={group: 1}).
+
+        :param obj: object: object to send as consumable
+        :param group: str: target group
+        """
+        assert isinstance(group, str), f"group must be a string, not {type(group)}"
+        self.send_object(obj=obj, destination={group: 1})
+
+    def notify(self, origins):
+        """
+        Notifies the Relay that the Endpoint is ready to retrieve consumables from origins.
+
+        origins can either be:
+            - a string (single group)
+            - a tuple of strings (set of groups)
+            - a dictionary where keys are strings (group) and values are integers (number of consumables from the group)
+
+        When origins is a string or a tuple of strings, 1 consumable will be retrieved per corresponding group(s).
+        When origins is a dictionary, each key is an origin group. For each corresponding value:
+            - If the value is N < 0, all available consumables are retrieved from the group.
+            - If the value is N > 0, at most N available consumables are retrieved from the group.
+
+        In any case, the group strings must be a subset of the Endpoint's groups.
+
+        :param origins: object: origins of the consumables.
+        """
+        if isinstance(origins, str):
+            origins = {origins: 1}
+        elif isinstance(origins, tuple) or isinstance(origins, list):
+            origins = {dest: 1 for dest in origins}
+        else:
+            assert isinstance(origins, dict), f"origins must be either of: str, (str), dict."
+            for k, v in origins.items():
+                assert isinstance(k, str), f"origins keys must be strings."
+                assert isinstance(v, int), f"origins values must be integers."
+        self._send_local(cmd='NTF', dest=origins, obj=None)
+
     def stop(self):
         # send STOP to the local server
         self._send_local(cmd='STOP', dest=None, obj=None)
@@ -188,20 +227,25 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.endpoint:
+        group = str(args.local_port)
         ep = Endpoint(ip_server=args.ip,
                       port_server=args.port,
                       password=args.password,
-                      groups=str(args.local_port),
+                      groups=group,
                       local_com_port=args.local_port)
         cpt = 1
+        time.sleep(2)
         while True:
-            obj_s = 'salut' + str(cpt)
+            obj_s = 'salut' + str(cpt) + 'from' + group
             cpt += 1
             dest_s = "3001" if args.local_port == 3000 else "3000"
-            ep.send_object(obj_s, destination=dest_s)
+            # ep.send_object(obj_s, destination=dest_s)
+            ep.produce(obj=obj_s, group=dest_s)
+            ep.notify(origins={group: -1})
 
-            print(ep.receive_all())
             time.sleep(2)
+            print(f"{group} received: {ep.receive_all()}")
+            # time.sleep(2)
 
     else:
         re = Relay(port=args.port,

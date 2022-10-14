@@ -70,6 +70,9 @@ class ServerProtocol(Protocol):
                         if cmd == "OBJ":
                             logging.info(f"Received object from client {self._identifier} for groups {dest}.")
                             self.forward_obj_to_dest(obj=obj, dest=dest)
+                        elif cmd == "NTF":
+                            logging.info(f"Received notification from client {self._identifier} for origins {dest}.")
+                            self.retrieve_consumables(origins=dest)
                         elif cmd == "HELLO":
                             groups = obj
                             if isinstance(groups, str):
@@ -120,6 +123,26 @@ class ServerProtocol(Protocol):
                     to_broadcast = d_group['to_broadcast']
                     if to_broadcast is not None:
                         self.send_obj(cmd='OBJ', obj=to_broadcast)
+
+    def retrieve_consumables(self, origins):
+        if self._identifier is not None:
+            for origin, n in origins.items():
+                for group, d_group in self._server.group_info.items():
+                    if origin == group and self._identifier in d_group['ids']:
+                        to_consume = d_group['to_consume']
+                        if len(to_consume) > 0:
+                            if n < 0:
+                                # retrieve all available consumables from this group
+                                while len(to_consume) > 0:
+                                    print(f'{self._identifier} consumed')
+                                    obj = to_consume.popleft()
+                                    self.send_obj(cmd='OBJ', obj=obj)
+                            elif n > 0:
+                                # retrieve at most n available consumables from this group
+                                while n > 0 and len(to_consume) > 0:
+                                    n -= 1
+                                    obj = to_consume.popleft()
+                                    self.send_obj(cmd='OBJ', obj=obj)
 
     def forward_obj_to_dest(self, obj, dest):
         if dest is not None:
