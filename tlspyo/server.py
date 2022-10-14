@@ -161,7 +161,6 @@ class ServerProtocol(Protocol):
                         # add object to group's consumables
                         for _ in range(value):
                             d_g['to_consume'].append(obj)
-                            # TODO: add notify() logic from Endpoints to retrieve a consumable from the Server
 
 
 class ServerProtocolFactory(Factory):
