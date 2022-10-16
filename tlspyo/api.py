@@ -4,8 +4,8 @@ from threading import Thread, Lock
 from multiprocessing import Process
 from copy import deepcopy
 
-from server import Server
-from client import Client
+from tlspyo.server import Server
+from tlspyo.client import Client
 
 
 class Relay:
@@ -35,7 +35,7 @@ class Relay:
 
 
 class Endpoint:
-    def __init__(self, ip_server, port_server, password, groups=None, local_com_port=2097, header_size=10):
+    def __init__(self, ip_server, port_server, password, groups=None, local_com_port=2097, header_size=10, max_buf_len=4096):
 
         # threading for local object receiving
         self.__obj_buffer = []
@@ -45,6 +45,7 @@ class Endpoint:
         if isinstance(groups, str):
             groups = (groups, )
         self._header_size = header_size
+        self._max_buf_len = max_buf_len
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
         self._client = Client(ip_server=ip_server,
@@ -70,14 +71,15 @@ class Endpoint:
         """
         buf = b""
         while True:
-            buf += self._local_com_conn.recv(4096)
+            buf += self._local_com_conn.recv(self._max_buf_len)
             i, j = self._process_header(buf)
-            if j <= len(buf):
+            while j <= len(buf):
                 stamp, cmd, obj = pkl.loads(buf[i:j])
                 if cmd == "OBJ":
                     with self.__obj_buffer_lock:
                         self.__obj_buffer.append(pkl.loads(obj))
                 buf = buf[j:]
+                i, j = self._process_header(buf)
 
     def _process_header(self, buf):
         i = self._header_size
@@ -210,46 +212,3 @@ class Endpoint:
                 cpy = deepcopy(self.__obj_buffer)
                 self.__obj_buffer = []
         return cpy
-
-
-if __name__ == '__main__':
-    from argparse import ArgumentParser
-    import time
-
-    parser = ArgumentParser()
-    parser.add_argument('--endpoint', dest='endpoint', action='store_true', default=False, help='Start as endpoint.')
-    parser.add_argument('--relay', dest='relay', action='store_true', default=True, help='Start as relay.')
-    parser.add_argument('--password', dest='password', type=str, default="pswd", help='Server password.')
-    parser.add_argument('--port', dest='port', type=int, default=2098, help='Server port.')
-    parser.add_argument('--ip', dest='ip', default="127.0.0.1", type=str, help='Server IP.')
-    parser.add_argument('--local_port', dest='local_port', type=int, default=3000, help='Local port.')
-
-    args = parser.parse_args()
-
-    if args.endpoint:
-        group = str(args.local_port)
-        ep = Endpoint(ip_server=args.ip,
-                      port_server=args.port,
-                      password=args.password,
-                      groups=group,
-                      local_com_port=args.local_port)
-        cpt = 1
-        time.sleep(2)
-        while True:
-            obj_s = 'salut' + str(cpt) + 'from' + group
-            cpt += 1
-            dest_s = "3001" if args.local_port == 3000 else "3000"
-            # ep.send_object(obj_s, destination=dest_s)
-            ep.produce(obj=obj_s, group=dest_s)
-            ep.notify(origins={group: -1})
-
-            time.sleep(2)
-            print(f"{group} received: {ep.receive_all()}")
-            # time.sleep(2)
-
-    else:
-        re = Relay(port=args.port,
-                   password=args.password,
-                   accepted_groups=None)
-        while True:
-            time.sleep(1)

@@ -7,7 +7,7 @@ from collections import deque
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.endpoints import TCP4ServerEndpoint
 
-from local_protocol_for_server import LocalProtocolForServerFactory
+from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
 
 
 class ServerProtocol(Protocol):
@@ -56,7 +56,6 @@ class ServerProtocol(Protocol):
                 if self._state == "KILLED":
                     return
                 while len(self._buffer) >= j:
-                    # print(f"i:{i}, j:{j}, MSG: {self._buffer[i:j]}")
                     stamp, cmd, dest, obj = pkl.loads(self._buffer[i:j])
                     if cmd == 'ACK':
                         try:
@@ -107,13 +106,11 @@ class ServerProtocol(Protocol):
         msg = pkl.dumps((self._server.ack_stamp, cmd, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self._server.pending_acks[self._server.ack_stamp] = (time.monotonic(), msg)
-        # print(f"sending OBJ msg: {msg}")
         self.transport.write(data=msg)
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-        # print(f"sending ACK msg: {msg}")
         self.transport.write(data=msg)
 
     def retrieve_broadcast(self):
@@ -134,7 +131,7 @@ class ServerProtocol(Protocol):
                             if n < 0:
                                 # retrieve all available consumables from this group
                                 while len(to_consume) > 0:
-                                    print(f'{self._identifier} consumed')
+                                    logging.info(f'Sending a consumable to client {self._identifier} from group {group}.')
                                     obj = to_consume.popleft()
                                     self.send_obj(cmd='OBJ', obj=obj)
                             elif n > 0:
@@ -148,7 +145,7 @@ class ServerProtocol(Protocol):
         if dest is not None:
             assert isinstance(dest, dict), f"destination is a {type(dest)}; must be a dict."
             for group, value in dest.items():
-                if group in self._server.group_info.keys():
+                if self._server.try_add_group(group):
                     d_g = self._server.group_info[group]
                     if value < 0:
                         # broadcast object to group
@@ -205,17 +202,20 @@ class Server:
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop
 
-    def add_accepted_group(self, group, max_count=math.inf):
+    def add_accepted_group(self, group, max_count=math.inf, max_consumables=None):
         """
         Adds a new group name to accepted group names
 
         :param group: str: name of the new group
         :param max_count: maximum number of simultaneous clients in this group
+        :param max_consumables: max number of consumables for this group
         """
         if self._accepted_groups is None:
             self._accepted_groups = {}
-        self._accepted_groups[group] = {'max_count': max_count}
-        self._accepted_groups['__server'] = {'max_count': 1}
+        self._accepted_groups[group] = {'max_count': max_count,
+                                        'max_consumables': max_consumables}
+        self._accepted_groups['__server'] = {'max_count': 1,
+                                             'max_consumables': None}
 
     def check_new_client(self, groups):
         """
@@ -242,16 +242,30 @@ class Server:
         logging.info(f"Adding client {identifier} to list of clients.")
         self.clients[identifier] = client
         for group in groups:
-            self.add_group(group)
-            logging.info(f"Adding client {identifier} to group {group}.")
-            self.group_info[group]['ids'].append(identifier)
+            if self.try_add_group(group):
+                logging.info(f"Adding client {identifier} to group {group}.")
+                self.group_info[group]['ids'].append(identifier)
         return identifier
 
-    def add_group(self, group, max_consumables=100):  # FIXME: set limit programatically
+    def try_add_group(self, group):
+        """
+        Adds group if valid.
+
+        :param group: string: requested group
+        :return success: bool: whether the group is valid
+        """
+        if self._accepted_groups is not None:
+            if group not in self._accepted_groups.keys():
+                logging.info(f"Invalid group {group}.")
+                return False
+        self.add_group(group)
+        return True
+
+    def add_group(self, group, max_consumables=None):
         if group not in self.group_info.keys():
             self.group_info[group] = {'ids': [],
                                       'to_broadcast': None,
-                                      'to_consume': deque(maxlen=max_consumables)}
+                                      'to_consume': deque(maxlen=max_consumables) if max_consumables is not None else deque()}
 
     def delete_client(self, identifier):
         for group, d_group in self.group_info.items():

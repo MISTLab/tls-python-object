@@ -1,4 +1,4 @@
 import logging
 logging.basicConfig(level=logging.INFO)
 
-from tlspyo.tlspyo import Relay, Endpoint
+from tlspyo.api import Relay, Endpoint

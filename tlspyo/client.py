@@ -3,7 +3,7 @@ import pickle as pkl
 import time
 
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
-from local_protocol_for_client import LocalProtocolForClientFactory
+from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
 
 class ClientProtocol(Protocol):
@@ -38,7 +38,6 @@ class ClientProtocol(Protocol):
         if len(self._buffer) >= self._header_size:
             i, j = self.process_header()
             while len(self._buffer) >= j:
-                # print(f"i:{i}, j:{j}, MSG: {self._buffer[i:j]}")
                 stamp, cmd, obj = pkl.loads(self._buffer[i:j])
                 if cmd == 'ACK':
                     try:
@@ -71,13 +70,11 @@ class ClientProtocol(Protocol):
         msg = pkl.dumps((self._client.ack_stamp, cmd, dest, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
-        # print(f"sending OBJ msg: {msg}")
         self.transport.write(data=msg)
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None, None))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
-        # print(f"sending ACK msg: {msg}")
         self.transport.write(data=msg)
 
 
