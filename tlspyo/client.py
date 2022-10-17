@@ -41,6 +41,7 @@ class ClientProtocol(Protocol):
                 stamp, cmd, obj = pkl.loads(self._buffer[i:j])
                 if cmd == 'ACK':
                     try:
+                        logging.info(f"ACK received after {time.monotonic() - self._client.pending_acks[stamp][0]}s.")
                         del self._client.pending_acks[stamp]  # delete pending ACK
                     except KeyError:
                         logging.warning(f"Received ACK for stamp {stamp} not present in pending ACKs.")

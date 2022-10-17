@@ -35,6 +35,7 @@ if __name__ == '__main__':
             time.sleep(random.uniform(0, 10))
             if args.local_port == 3000:
                 ep.notify(origins={group: 2})
+                ep.notify(origins={"blabla": 1})
                 print(f"{group} received: {ep.pop(max_items=2, blocking=True)}")
             else:
                 ep.notify(origins={group: -1})
