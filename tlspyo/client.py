@@ -54,13 +54,16 @@ class ClientProtocol(Protocol):
                             cmd, dest, obj = self._client.store[0]
                             self.send_obj(cmd=cmd, dest=dest, obj=obj)  # send buffered command
                             self._client.store = self._client.store[1:]  # remove buffered command from store
-                    elif cmd == "OBJ":
-                        logging.debug(f"Received object, transferring to local EndPoint.")
-                        # transfer the object to the EndPoint server
-                        if self._client.endpoint is not None:
-                            self._client.endpoint.transport.write(data=self._buffer[:j])
-                        else:
-                            logging.warning(f"Local EndPoint is not connected, discarding object.")
+                    else:
+                        if self._state != "ALIVE":
+                            logging.warning(f"Received a command in a bad state: {self._state}.")
+                        if cmd == "OBJ":
+                            logging.debug(f"Received object, transferring to local EndPoint.")
+                            # transfer the object to the EndPoint server
+                            if self._client.endpoint is not None:
+                                self._client.endpoint.transport.write(data=self._buffer[:j])
+                            else:
+                                logging.warning(f"Local EndPoint is not connected, discarding object.")
                 # truncate the processed part of the buffer:
                 self._buffer = self._buffer[j:]
                 i, j = self.process_header()

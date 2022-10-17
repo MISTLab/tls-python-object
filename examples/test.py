@@ -1,6 +1,9 @@
 from argparse import ArgumentParser
 import time
+import random
+
 from tlspyo import Relay, Endpoint
+
 
 if __name__ == '__main__':
 
@@ -22,17 +25,20 @@ if __name__ == '__main__':
                       groups=group,
                       local_com_port=args.local_port)
         cpt = 1
-        time.sleep(2)
         while True:
             obj_s = 'salut' + str(cpt) + 'from' + group
             cpt += 1
             dest_s = "3001" if args.local_port == 3000 else "3000"
             # ep.send_object(obj_s, destination=dest_s)
             ep.produce(obj=obj_s, group=dest_s)
-            ep.notify(origins={group: -1})
 
-            time.sleep(2)
-            print(f"{group} received: {ep.receive_all()}")
+            time.sleep(random.uniform(0, 10))
+            if args.local_port == 3000:
+                ep.notify(origins={group: 2})
+                print(f"{group} received: {ep.pop(max_items=2, blocking=True)}")
+            else:
+                ep.notify(origins={group: -1})
+                print(f"{group} received: {ep.receive_all(blocking=False)}")
             # time.sleep(2)
 
     else:

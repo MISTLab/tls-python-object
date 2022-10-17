@@ -66,18 +66,10 @@ class ServerProtocol(Protocol):
                         self.send_ack(stamp)  # send ACK
                         if isinstance(dest, str):
                             dest = (dest, )
-                        if cmd == "OBJ":
-                            logging.info(f"Received object from client {self._identifier} for groups {dest}.")
-                            self.forward_obj_to_dest(obj=obj, dest=dest)
-                        elif cmd == "NTF":
-                            logging.info(f"Received notification from client {self._identifier} for origins {dest}.")
-                            self.retrieve_consumables(origins=dest)
-                        elif cmd == "HELLO":
+                        if cmd == "HELLO":
                             groups = obj
                             if isinstance(groups, str):
-                                groups = (groups, )
-                            # elif groups is None:
-                            #     groups = ('__default', )  # FIXME: maybe remove this as this may be a security concern
+                                groups = (groups,)
                             if self._server.check_new_client(groups=groups):
                                 logging.info(f"New client with groups {groups}.")
                                 self._identifier = self._server.add_client(groups=groups, client=self)
@@ -86,10 +78,17 @@ class ServerProtocol(Protocol):
                             else:
                                 self._state = "CLOSED"
                                 self.transport.loseConnection()
-                        else:
-                            logging.info(f"Invalid command: {cmd}")
-                            self._state = "CLOSED"
-                            self.transport.loseConnection()
+                        elif self._state == "ALIVE":
+                            if cmd == "OBJ":
+                                logging.info(f"Received object from client {self._identifier} for groups {dest}.")
+                                self.forward_obj_to_dest(obj=obj, dest=dest)
+                            elif cmd == "NTF":
+                                logging.info(f"Received notification from client {self._identifier} for origins {dest}.")
+                                self.retrieve_consumables(origins=dest)
+                            else:
+                                logging.info(f"Invalid command: {cmd}")
+                                self._state = "CLOSED"
+                                self.transport.loseConnection()
                     # truncate the processed part of the buffer:
                     self._buffer = self._buffer[j:]
                     i, j, psw = self.process_header()
@@ -126,20 +125,41 @@ class ServerProtocol(Protocol):
             for origin, n in origins.items():
                 for group, d_group in self._server.group_info.items():
                     if origin == group and self._identifier in d_group['ids']:
-                        to_consume = d_group['to_consume']
-                        if len(to_consume) > 0:
-                            if n < 0:
-                                # retrieve all available consumables from this group
-                                while len(to_consume) > 0:
-                                    logging.info(f'Sending a consumable to client {self._identifier} from group {group}.')
-                                    obj = to_consume.popleft()
-                                    self.send_obj(cmd='OBJ', obj=obj)
-                            elif n > 0:
-                                # retrieve at most n available consumables from this group
-                                while n > 0 and len(to_consume) > 0:
-                                    n -= 1
-                                    obj = to_consume.popleft()
-                                    self.send_obj(cmd='OBJ', obj=obj)
+                        if n > 0:
+                            # add pending consumables from this group for this client
+                            d_group['pending_consumers'][self._identifier] += n
+                            # retrieve available pending consumables
+                            self.dispatch_pending_consumables(group)
+                        elif n < 0:
+                            # send all available consumables from this group to this client
+                            self.send_all_consumables(group)
+
+    def dispatch_pending_consumables(self, group):
+        # retrieve at most n available consumables from this group
+        logging.info(f"Dispatching consumables from group {group}.")
+        if group in self._server.group_info.keys():
+            d_group = self._server.group_info[group]
+            to_consume = d_group['to_consume']
+            pending_consumers = d_group['pending_consumers']
+            for id in pending_consumers.keys():
+                while pending_consumers[id] > 0 and len(to_consume) > 0:
+                    pending_consumers[id] -= 1
+                    obj = to_consume.popleft()
+                    logging.info(f"Sending a consumable to client {id} from group {group} (remaining: {pending_consumers[id]}).")
+                    self._server.clients[id].send_obj(cmd='OBJ', obj=obj)
+        else:
+            logging.info(f"Group {group} is not registered in the server.")
+
+    def send_all_consumables(self, group):
+        # retrieve all available consumables from this group
+        if group in self._server.group_info.keys():
+            d_group = self._server.group_info[group]
+            to_consume = d_group['to_consume']
+            pending_consumers = d_group['pending_consumers']
+            while len(to_consume) > 0:
+                logging.info(f'Sending a consumable to client {self._identifier} from group {group}.')
+                obj = to_consume.popleft()
+                self.send_obj(cmd='OBJ', obj=obj)
 
     def forward_obj_to_dest(self, obj, dest):
         if dest is not None:
@@ -152,12 +172,14 @@ class ServerProtocol(Protocol):
                         d_g['to_broadcast'] = obj
                         ids = d_g['ids']
                         for id_cli in ids:
-                            logging.info(f"Sending object to identifier {id_cli}.")
+                            logging.info(f"Sending object from group {group} to identifier {id_cli}.")
                             self._server.clients[id_cli].send_obj(cmd='OBJ', obj=obj)
                     elif value > 0:
                         # add object to group's consumables
+                        logging.info(f"Adding {value} copies of the consumable to group {group}.")
                         for _ in range(value):
                             d_g['to_consume'].append(obj)
+                        self.dispatch_pending_consumables(group)
 
 
 class ServerProtocolFactory(Factory):
@@ -245,6 +267,7 @@ class Server:
             if self.try_add_group(group):
                 logging.info(f"Adding client {identifier} to group {group}.")
                 self.group_info[group]['ids'].append(identifier)
+                self.group_info[group]['pending_consumers'][identifier] = 0
         return identifier
 
     def try_add_group(self, group):
@@ -263,9 +286,11 @@ class Server:
 
     def add_group(self, group, max_consumables=None):
         if group not in self.group_info.keys():
-            self.group_info[group] = {'ids': [],
-                                      'to_broadcast': None,
-                                      'to_consume': deque(maxlen=max_consumables) if max_consumables is not None else deque()}
+            self.group_info[group] = {'ids': [],  # ids of the clients present in this group
+                                      'to_broadcast': None,  # object to broadcast
+                                      'to_consume': deque(maxlen=max_consumables) if max_consumables is not None else deque(),  # queue of objects to consume
+                                      'pending_consumers': {}  # dict mapping client ids to number of remaining consumables to send from this group
+                                      }
 
     def delete_client(self, identifier):
         for group, d_group in self.group_info.items():
@@ -273,6 +298,7 @@ class Server:
             if identifier in idents:
                 logging.info(f"Removing client {identifier} from group {group}.")
                 idents.remove(identifier)
+                del d_group['pending_consumers'][identifier]
         logging.info(f"Removing client {identifier} from list of clients.")
         del self.clients[identifier]
 
