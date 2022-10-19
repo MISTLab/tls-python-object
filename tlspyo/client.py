@@ -75,6 +75,8 @@ class ClientProtocol(Protocol):
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
         self.transport.write(data=msg)
+        print(f"|||||||||||||||| Sending object {pkl.loads(obj) if isinstance(obj, bytes) else obj}")
+
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None, None))
@@ -138,6 +140,9 @@ class Client:
         self._reactor.run()  # main Twisted reactor loop
 
     def close(self):
+        if self.server is not None:
+            self.server.transport.loseConnection()
+            
         if self._reactor is not None:
             self._reactor.stop()
 

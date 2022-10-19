@@ -32,6 +32,7 @@ class LocalProtocolForClient(Protocol):
                     cmd, dest, obj_bytes = pkl.loads(self._buffer[i:j])
                     if cmd == "STOP":
                         logging.info(f"Local: Stopping reactor.")
+                        self.transport.loseConnection()
                         self._client.close()
                         logging.info(f"Local: Reactor stopped.")
                     elif cmd in ("OBJ", "NTF"):

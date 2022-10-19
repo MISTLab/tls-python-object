@@ -43,6 +43,7 @@ class LocalProtocolForServer(Protocol):
                     cmd, _ = pkl.loads(self._buffer[i:j])
                     if cmd == "STOP":
                         logging.info(f"Local: Stopping reactor.")
+                        self.transport.loseConnection()
                         self._server.close()
                         logging.info(f"Local: Reactor stopped.")
                     else:
@@ -81,7 +82,9 @@ class LocalProtocolForServerFactory(ClientFactory):
         return LocalProtocolForServer(self.server)
 
     def clientConnectionLost(self, connector, reason):
-        logging.info(f'Local: Client lost connection.  Reason: {reason}')
+        pass
+        # logging.info(f'Local: Client lost connection.  Reason: {reason}')
 
     def clientConnectionFailed(self, connector, reason):
-        logging.info(f'Local: Client connection failed. Reason: {reason}')
+        pass
+        # logging.info(f'Local: Client connection failed. Reason: {reason}')

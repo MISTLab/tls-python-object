@@ -16,7 +16,9 @@ setup(name='tlspyo',
       url='https://github.com/MISTLab/tls-python-object',
       download_url='',
       keywords=['python', 'tls', 'ssl', 'pickle', 'transfer', 'object', 'transport', 'twisted'],
-      install_requires=[],
+      install_requires=[
+        'twisted'
+        ],
       classifiers=[
           'DDevelopment Status :: 4 - Beta',
           'Intended Audience :: Developers',

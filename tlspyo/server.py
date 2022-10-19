@@ -80,11 +80,11 @@ class ServerProtocol(Protocol):
                                 self.transport.loseConnection()
                         elif self._state == "ALIVE":
                             if cmd == "OBJ":
-                                logging.info(f"Received object from client {self._identifier} for groups {dest}.")
+                                logging.info(f"Received object {pkl.loads(obj)} from client {self._identifier} for groups {dest}.")
                                 self.forward_obj_to_dest(obj=obj, dest=dest)
                             elif cmd == "NTF":
-                                logging.info(f"Received notification from client {self._identifier} for origins {dest}.")
-                                self.retrieve_consumables(origins=dest)
+                                logging.info(f"Received notification from client {self._identifier} for destination {dest}.")
+                                self.retrieve_consumables(groups=dest)
                             else:
                                 logging.info(f"Invalid command: {cmd}")
                                 self._state = "CLOSED"
@@ -107,6 +107,7 @@ class ServerProtocol(Protocol):
         self._server.pending_acks[self._server.ack_stamp] = (time.monotonic(), msg)
         self.transport.write(data=msg)
 
+
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
@@ -120,9 +121,9 @@ class ServerProtocol(Protocol):
                     if to_broadcast is not None:
                         self.send_obj(cmd='OBJ', obj=to_broadcast)
 
-    def retrieve_consumables(self, origins):
+    def retrieve_consumables(self, groups):
         if self._identifier is not None:
-            for origin, n in origins.items():
+            for origin, n in groups.items():
                 for group, d_group in self._server.group_info.items():
                     if origin == group and self._identifier in d_group['ids']:
                         if n > 0:
@@ -172,11 +173,11 @@ class ServerProtocol(Protocol):
                         d_g['to_broadcast'] = obj
                         ids = d_g['ids']
                         for id_cli in ids:
-                            logging.info(f"Sending object from group {group} to identifier {id_cli}.")
+                            logging.info(f"Sending object {pkl.loads(obj)} from group {group} to identifier {id_cli}.")
                             self._server.clients[id_cli].send_obj(cmd='OBJ', obj=obj)
                     elif value > 0:
                         # add object to group's consumables
-                        logging.info(f"Adding {value} copies of the consumable to group {group}.")
+                        logging.info(f"Adding {value} copies of the consumable {pkl.loads(obj)} to group {group}.")
                         for _ in range(value):
                             d_g['to_consume'].append(obj)
                         self.dispatch_pending_consumables(group)

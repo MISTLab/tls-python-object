@@ -1,3 +1,4 @@
+import queue
 import time
 from socket import AF_INET, SOCK_STREAM, socket
 import pickle as pkl
@@ -8,6 +9,10 @@ import signal
 
 from tlspyo.server import Server
 from tlspyo.client import Client
+
+from tlspyo.utils import get_from_queue, wait_event
+
+import logging
 
 
 class Relay:
@@ -40,10 +45,12 @@ class Endpoint:
     def __init__(self, ip_server, port_server, password, groups=None, local_com_port=2097, header_size=10, max_buf_len=4096):
 
         # threading for local object receiving
-        self.__obj_buffer = []
-        self.__obj_buffer_lock = Lock()
-        self.__obj_buffer_event = Event()  # set when the buffer is not empty, cleared otherwise
-
+        self.__obj_buffer = queue.Queue()
+        # self.__obj_buffer_lock = Lock()
+        # self.__obj_buffer_event = Event()  # set when the buffer is not empty, cleared otherwise
+        self.__socket_closed_lock = Lock() 
+        self.__socket_closed_flag = False
+    
         # networking (local and internet)
         if isinstance(groups, str):
             groups = (groups, )
@@ -71,29 +78,27 @@ class Endpoint:
         # TODO: change this for a proper handshake with the local socket:
         time.sleep(1.0)  # let things connect
 
-    def __wait_event(self, granularity=0.1):
-        """
-        Workaround for an Event bug on Windows.
-
-        See: https://bugs.python.org/issue35935
-        """
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
-        self.__obj_buffer_event.wait()
-
     def _manage_received_objects(self):
         """
         Called in its own thread.
         """
         buf = b""
         while True:
+            # Check if socket is still open
+            with self.__socket_closed_lock:
+                if self.__socket_closed_flag:
+                    self._local_com_conn.close()
+                    return
+
             buf += self._local_com_conn.recv(self._max_buf_len)
             i, j = self._process_header(buf)
             while j <= len(buf):
                 stamp, cmd, obj = pkl.loads(buf[i:j])
                 if cmd == "OBJ":
-                    with self.__obj_buffer_lock:
-                        self.__obj_buffer.append(pkl.loads(obj))
-                        self.__obj_buffer_event.set()  # before releasing lock
+                    self.__obj_buffer.put(pkl.loads(obj))
+                    # with self.__obj_buffer_lock:
+                    #     self.__obj_buffer.append(pkl.loads(obj))
+                    #     self.__obj_buffer_event.set()  # before releasing lock
                 buf = buf[j:]
                 i, j = self._process_header(buf)
 
@@ -150,43 +155,55 @@ class Endpoint:
         assert isinstance(group, str), f"group must be a string, not {type(group)}"
         self.send_object(obj=obj, destination={group: 1})
 
-    def notify(self, origins):
+    def notify(self, groups):
         """
-        Notifies the Relay that the Endpoint is ready to retrieve consumables from origins.
+        Notifies the Relay that the Endpoint is ready to retrieve consumables from destination groups.
 
-        origins can either be:
+        groups can either be:
             - a string (single group)
             - a tuple of strings (set of groups)
             - a dictionary where keys are strings (group) and values are integers (number of consumables from the group)
 
-        When origins is a string or a tuple of strings, 1 consumable will be retrieved per corresponding group(s).
-        When origins is a dictionary, each key is an origin group. For each corresponding value:
+        When groups is a string or a tuple of strings, 1 consumable will be retrieved per corresponding group(s).
+        When groups is a dictionary, each key is a destination group. For each corresponding value:
             - If the value is N < 0, all available consumables are retrieved from the group.
             - If the value is N > 0, at most N available consumables are retrieved from the group.
 
         In any case, the group strings must be a subset of the Endpoint's groups.
 
-        :param origins: object: origins of the consumables.
+        :param groups: object: destination groups of the consumables.
         """
-        if isinstance(origins, str):
-            origins = {origins: 1}
-        elif isinstance(origins, tuple) or isinstance(origins, list):
-            origins = {dest: 1 for dest in origins}
+        if isinstance(groups, str):
+            groups = {groups: 1}
+        elif isinstance(groups, tuple) or isinstance(groups, list):
+            groups = {dest: 1 for dest in groups}
         else:
-            assert isinstance(origins, dict), f"origins must be either of: str, (str), dict."
-            for k, v in origins.items():
-                assert isinstance(k, str), f"origins keys must be strings."
-                assert isinstance(v, int), f"origins values must be integers."
-        self._send_local(cmd='NTF', dest=origins, obj=None)
+            assert isinstance(groups, dict), f"groups must be either of: str, (str), dict."
+            for k, v in groups.items():
+                assert isinstance(k, str), f"groups keys must be strings."
+                assert isinstance(v, int), f"groups values must be integers."
+        self._send_local(cmd='NTF', dest=groups, obj=None)
 
     def stop(self):
         # send STOP to the local server
         self._send_local(cmd='STOP', dest=None, obj=None)
+        logging.info("STOP: Sent command to stop")
+
+        # Join the message reading thread
+        with self.__socket_closed_lock:
+            self.__socket_closed_flag = True
+        self._t_manage_received_objects.join()
+
+        logging.info("STOP: Stop message reading thread")
 
         # join Twisted process and stop local server
         self._p.join()
+
+        logging.info("STOP: Joined twisted process")
         self._local_com_conn.close()
+        self._local_com_srv.close()
         self._local_com_addr = None
+
 
     def receive_all(self, blocking=False):
         """
@@ -195,14 +212,11 @@ class Endpoint:
         :param blocking: bool: If True, the call blocks until objects are available. Otherwise, the list may be empty.
         :return: list: received objects
         """
-        if blocking:
-            self.__wait_event()
-
-        with self.__obj_buffer_lock:
-            assert not blocking or len(self.__obj_buffer) > 0, f'The buffer is unexpectedly empty.'
-            cpy = deepcopy(self.__obj_buffer)
-            self.__obj_buffer = []
-            self.__obj_buffer_event.clear()  # before releasing lock
+        cpy = get_from_queue(self.__obj_buffer, blocking)
+        if len(cpy) == 0:
+            return cpy
+        while not self.__obj_buffer.empty():
+            cpy += get_from_queue(self.__obj_buffer) 
 
         return cpy
 
@@ -215,49 +229,39 @@ class Endpoint:
             Otherwise, the list may be empty or contain less than max_items.
         :return: list: returned items
         """
-        cpy = []
-        while True:
-            if blocking:
-                self.__wait_event()
-            with self.__obj_buffer_lock:
-                assert not blocking or len(self.__obj_buffer) > 0, f'The buffer is unexpectedly empty.'
-                if len(self.__obj_buffer) >= max_items:
-                    cpy += deepcopy(self.__obj_buffer[:max_items])
-                    self.__obj_buffer = self.__obj_buffer[max_items:]
-                else:
-                    cpy += deepcopy(self.__obj_buffer)
-                    self.__obj_buffer = []
-                if len(self.__obj_buffer) == 0:
-                    self.__obj_buffer_event.clear()  # before releasing lock
-            if not blocking or len(cpy) >= max_items:
+        print('popping before')
+        cpy = get_from_queue(self.__obj_buffer, blocking)
+
+        assert len(cpy) == 0 or blocking, 'Issue in pop'
+
+        if len(cpy) == 0:
+            return cpy
+        print('popping after 1')
+
+        while len(cpy) < max_items:
+            elem = get_from_queue(self.__obj_buffer, blocking=False)
+            if len(elem) == 0:
                 break
+            cpy += elem
+        print('popping after 2')
+
         return cpy
 
-    def pop_lifo(self, max_items=1, clear=False, blocking=False):
+    def pop_lifo(self, max_items=1, blocking=False):
         """
-        Returns at most max_items from the object buffer using a LIFO stack implementation.
+        Returns at most max_items from the object buffer using a LIFO stack implementation and removes all other items.
+       
+        Items are returned from the most recent to the oldest.
+        
         :param max_items:int: maximum number of items to return
-        :param clear:bool: Indicates whether the buffer should be cleared when called.
         :param blocking: bool: If True, the call blocks until max_items are retrieved.
             Otherwise, the list may be empty or contain less than max_items.
         :return: list: The returned items
         """
-        cpy = []
-        while True:
-            if blocking:
-                self.__wait_event()
-            with self.__obj_buffer_lock:
-                if len(self.__obj_buffer) >= max_items:
-                    cpy += deepcopy(self.__obj_buffer[-max_items:])
-                    if clear:
-                        self.__obj_buffer = []
-                    else:
-                        self.__obj_buffer = self.__obj_buffer[:-max_items]
-                else:
-                    cpy += deepcopy(self.__obj_buffer)
-                    self.__obj_buffer = []
-                if len(self.__obj_buffer) == 0:
-                    self.__obj_buffer_event.clear()  # before releasing lock
-            if not blocking or len(cpy) >= max_items:
-                break
-        return cpy
+        cpy = get_from_queue(self.__obj_buffer, blocking)
+        if len(cpy) == 0:
+            return cpy
+        while not self.__obj_buffer.empty():
+            cpy += get_from_queue(self.__obj_buffer)
+
+        return list(reversed(cpy))[:max_items]
