@@ -32,14 +32,13 @@ class HelperTester:
         _ = self.queue2.get()
         ep.stop()
 
-
     def relay_process(self):
-        '''
+        """
         Function to launch the server. Needs to be called from a separate process.
-        '''
+        """
         re = Relay(port=RELAY_PORT,
-                    password=PASSWORD,
-                    accepted_groups=None)
+                   password=PASSWORD,
+                   accepted_groups=None)
 
         # Run server while tests are running
         _ = self.queue.get()  
@@ -82,13 +81,13 @@ class TestBroadcastObjects(unittest.TestCase):
         # Consume what is produced for us by pair
         cpt = 0
         while cpt < 50:
-            print('Notifying')
-
-            ep.notify(groups={"consumer1":5})
-            print('Starting to pop')
+            # print('Notifying')
+            ep.notify(groups={"consumer1": 5})
+            # print('Starting to pop')
             res = ep.pop(max_items=1, blocking=True)
+            # print(f"res:{res}")
             self.assertEqual(res[0], cpt)
-            print(cpt)
+            # print(cpt)
             cpt += 1
 
         # Stop the endpoint
@@ -96,8 +95,6 @@ class TestBroadcastObjects(unittest.TestCase):
         # Notice to stop the server
         self.queue.put("Done")
         self.queue2.put("DONE")
-
-
 
     # def test_2(self):
     #     pass
@@ -108,6 +105,7 @@ class TestBroadcastObjects(unittest.TestCase):
     # Stop the server and all endpoints
     def tearDown(self):
         pass
+
 
 if __name__ == '__main__':
     unittest.main()

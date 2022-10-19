@@ -107,7 +107,6 @@ class ServerProtocol(Protocol):
         self._server.pending_acks[self._server.ack_stamp] = (time.monotonic(), msg)
         self.transport.write(data=msg)
 
-
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
@@ -147,7 +146,7 @@ class ServerProtocol(Protocol):
                     pending_consumers[id] -= 1
                     obj = to_consume.popleft()
                     logging.info(f"Sending a consumable to client {id} from group {group} (remaining: {pending_consumers[id]}).")
-                    self._server.clients[id].send_obj(cmd='OBJ', obj=obj)
+                    self._server.to_clients[id].send_obj(cmd='OBJ', obj=obj)
         else:
             logging.info(f"Group {group} is not registered in the server.")
 
@@ -174,7 +173,7 @@ class ServerProtocol(Protocol):
                         ids = d_g['ids']
                         for id_cli in ids:
                             logging.info(f"Sending object {pkl.loads(obj)} from group {group} to identifier {id_cli}.")
-                            self._server.clients[id_cli].send_obj(cmd='OBJ', obj=obj)
+                            self._server.to_clients[id_cli].send_obj(cmd='OBJ', obj=obj)
                     elif value > 0:
                         # add object to group's consumables
                         logging.info(f"Adding {value} copies of the consumable {pkl.loads(obj)} to group {group}.")
@@ -203,12 +202,13 @@ class Server:
         self.password = password
         self.header_size = header_size
         self._accepted_groups = accepted_groups
-        self.clients = {}  # dict of identifiers to clients
+        self.to_clients = {}  # dict of identifiers to protocols toward clients
         self.group_info = {}  # dictionary of group names to dicts of group info
         self._id_cpt = 0
         self.ack_stamp = 0
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
         self._reactor = None
+        self._listener = None
 
     def run(self):
         """
@@ -219,11 +219,13 @@ class Server:
         from twisted.internet.interfaces import IReadDescriptor
         from twisted.internet import reactor
 
-        endpoint = TCP4ServerEndpoint(reactor, self._port)
-        endpoint.listen(ServerProtocolFactory(self))  # we pass the instance of Server to the Factory
+        self._listener = TCP4ServerEndpoint(reactor, self._port)
+        self._listener.listen(ServerProtocolFactory(self))  # we pass the instance of Server to the Factory
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForServerFactory(self))
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop
+        self._reactor = None  # remove when done
+        logging.info(f"Server reactor stopped, exiting process.")
 
     def add_accepted_group(self, group, max_count=math.inf, max_consumables=None):
         """
@@ -263,7 +265,7 @@ class Server:
         identifier = self._id_cpt
         self._id_cpt += 1
         logging.info(f"Adding client {identifier} to list of clients.")
-        self.clients[identifier] = client
+        self.to_clients[identifier] = client
         for group in groups:
             if self.try_add_group(group):
                 logging.info(f"Adding client {identifier} to group {group}.")
@@ -301,19 +303,18 @@ class Server:
                 idents.remove(identifier)
                 del d_group['pending_consumers'][identifier]
         logging.info(f"Removing client {identifier} from list of clients.")
-        del self.clients[identifier]
+        del self.to_clients[identifier]
 
     def has_client(self, identifier):
-        return identifier in self.clients
+        return identifier in self.to_clients
 
     def close(self):
         if self._reactor is not None:
-            identifiers = list(self.clients.keys())
+            identifiers = list(self.to_clients.keys())
             for identifier in identifiers:
-                self.clients[identifier].transport.loseConnection()
+                self.to_clients[identifier].transport.loseConnection()
                 self.delete_client(identifier)
             self._reactor.stop()
-            self._reactor = None
 
 
 if __name__ == "__main__":

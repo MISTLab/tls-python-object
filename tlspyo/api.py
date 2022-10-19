@@ -95,7 +95,7 @@ class Endpoint:
             while j <= len(buf):
                 stamp, cmd, obj = pkl.loads(buf[i:j])
                 if cmd == "OBJ":
-                    self.__obj_buffer.put(pkl.loads(obj))
+                    self.__obj_buffer.put(pkl.loads(obj))  # TODO: maxlen
                     # with self.__obj_buffer_lock:
                     #     self.__obj_buffer.append(pkl.loads(obj))
                     #     self.__obj_buffer_event.set()  # before releasing lock
@@ -204,7 +204,6 @@ class Endpoint:
         self._local_com_srv.close()
         self._local_com_addr = None
 
-
     def receive_all(self, blocking=False):
         """
         Returns all received objects in a list, from oldest to newest.
@@ -212,56 +211,51 @@ class Endpoint:
         :param blocking: bool: If True, the call blocks until objects are available. Otherwise, the list may be empty.
         :return: list: received objects
         """
-        cpy = get_from_queue(self.__obj_buffer, blocking)
-        if len(cpy) == 0:
-            return cpy
-        while not self.__obj_buffer.empty():
-            cpy += get_from_queue(self.__obj_buffer) 
-
+        cpy = []
+        elem = get_from_queue(self.__obj_buffer, blocking)
+        while len(elem) > 0:
+            cpy += elem
+            elem = get_from_queue(self.__obj_buffer, blocking=False)
         return cpy
 
     def pop(self, max_items=1, blocking=False):
         """
-        Returns at most max_items oldest received objects.
+        Returns at most max_items oldest received objects (FIFO).
 
-        :param max_items:int: desired max number of items.
-        :param blocking: bool: If True, the call blocks until max_items are retrieved.
-            Otherwise, the list may be empty or contain less than max_items.
-        :return: list: returned items
+        Items are returned from older to more recent.
+
+        :param max_items: int: max number of retrieved items.
+        :param blocking: bool: If True, the call blocks until at least 1 item is retrieved.
+            Otherwise, the returned list may be empty.
+        :return: list: returned items.
         """
-        print('popping before')
-        cpy = get_from_queue(self.__obj_buffer, blocking)
-
-        assert len(cpy) == 0 or blocking, 'Issue in pop'
-
-        if len(cpy) == 0:
-            return cpy
-        print('popping after 1')
-
-        while len(cpy) < max_items:
-            elem = get_from_queue(self.__obj_buffer, blocking=False)
-            if len(elem) == 0:
-                break
+        cpy = []
+        elem = get_from_queue(self.__obj_buffer, blocking)
+        assert len(elem) == 0 or blocking, 'Issue in pop'
+        while len(elem) > 0:
             cpy += elem
-        print('popping after 2')
-
+            if len(cpy) >= max_items:
+                break
+            elem = get_from_queue(self.__obj_buffer, blocking=False)
         return cpy
 
-    def pop_lifo(self, max_items=1, blocking=False):
+    def get_last(self, max_items=1, blocking=False):
         """
-        Returns at most max_items from the object buffer using a LIFO stack implementation and removes all other items.
+        Returns at most the max_items most recently received objects, and clears receiving buffer.
        
-        Items are returned from the most recent to the oldest.
+        Items are returned from older to more recent.
+        Calling this method clears the receiving buffer.
+        In other words, only the most recent objects are retrieved, older objects in the buffer are deleted.
+        In case this behavior is not desirable in your application, use `receive_all` or `pop` instead.
         
-        :param max_items:int: maximum number of items to return
-        :param blocking: bool: If True, the call blocks until max_items are retrieved.
-            Otherwise, the list may be empty or contain less than max_items.
-        :return: list: The returned items
+        :param max_items: int: maximum number of items to return
+        :param blocking: bool: If True, the call blocks until at least one item is retrieved.
+            Otherwise, the returned list may be empty.
+        :return: list: The returned items.
         """
-        cpy = get_from_queue(self.__obj_buffer, blocking)
-        if len(cpy) == 0:
-            return cpy
-        while not self.__obj_buffer.empty():
-            cpy += get_from_queue(self.__obj_buffer)
-
-        return list(reversed(cpy))[:max_items]
+        cpy = []
+        elem = get_from_queue(self.__obj_buffer, blocking)
+        while len(elem) > 0:
+            cpy += elem
+            elem = get_from_queue(self.__obj_buffer, blocking=False)
+        return cpy[max_items:]

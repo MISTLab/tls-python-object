@@ -18,12 +18,12 @@ class ClientProtocol(Protocol):
     def connectionMade(self):
         logging.info(f"Connection made.")
         assert self._state == "HANDSHAKE", f"Bad state: {self._state}"
-        self._client.server = self
+        self._client.to_server = self
 
     def connectionLost(self, reason):
         logging.info(f"Connection lost: {reason}")
         self._state = "DEAD"
-        self._client.server = None
+        self._client.to_server = None
 
     def process_header(self):
         i = self._header_size
@@ -75,8 +75,7 @@ class ClientProtocol(Protocol):
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
         self.transport.write(data=msg)
-        print(f"|||||||||||||||| Sending object {pkl.loads(obj) if isinstance(obj, bytes) else obj}")
-
+        # print(f"|||||||||||||||| Sending object {pkl.loads(obj) if isinstance(obj, bytes) else obj}")
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None, None))
@@ -119,7 +118,7 @@ class Client:
         self.password = password
         self.header_size = header_size
         self._reactor = None
-        self.server = None  # to communicate with the central relay
+        self.to_server = None  # to communicate with the central relay
         self.endpoint = None  # to communicate with endpoint
         self.store = []
         self.ack_stamp = 0
@@ -138,11 +137,12 @@ class Client:
         reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop
+        self._reactor = None  # clean when done
+        logging.info(f"Client reactor stopped, exiting process.")
 
     def close(self):
-        if self.server is not None:
-            self.server.transport.loseConnection()
-            
+        if self.to_server is not None:
+            self.to_server.transport.loseConnection()
         if self._reactor is not None:
             self._reactor.stop()
 

@@ -22,6 +22,13 @@ class LocalProtocolForClient(Protocol):
         self._client.endpoint = None
         self._state = "DEAD"
 
+    def die(self):
+        # TODO: check for pending ACKs before dying (with a backup plan if the last ACK is not received after a certain time)
+        logging.info(f"Local: Client shutting down.")
+        self._state = "SHUTDOWN"
+        self.transport.loseConnection()
+        self._client.close()
+
     def dataReceived(self, data):
         try:
             self._buffer += data
@@ -31,14 +38,11 @@ class LocalProtocolForClient(Protocol):
                 while len(self._buffer) >= j:
                     cmd, dest, obj_bytes = pkl.loads(self._buffer[i:j])
                     if cmd == "STOP":
-                        logging.info(f"Local: Stopping reactor.")
-                        self.transport.loseConnection()
-                        self._client.close()
-                        logging.info(f"Local: Reactor stopped.")
+                        self.die()
                     elif cmd in ("OBJ", "NTF"):
                         # send the object to the central relay
-                        if self._client.server is not None and self._state == "ALIVE":
-                            self._client.server.send_obj(cmd=cmd, dest=dest, obj=obj_bytes)
+                        if self._client.to_server is not None and self._state == "ALIVE":
+                            self._client.to_server.send_obj(cmd=cmd, dest=dest, obj=obj_bytes)
                         else:
                             logging.warning('The client is not connected to the Internet server, storing message.')
                             self._client.store.append((cmd, dest, obj_bytes))

@@ -36,10 +36,10 @@ if __name__ == '__main__':
             if args.local_port == 3000:
                 ep.notify(groups={group: 2})
                 ep.notify(groups={"blabla": 1})
-                print(f"{group} received: {ep.pop(max_items=2, blocking=True)}")
+                # print(f"{group} received: {ep.pop(max_items=2, blocking=True)}")
             else:
                 ep.notify(groups={group: -1})
-                print(f"{group} received: {ep.receive_all(blocking=False)}")
+                # print(f"{group} received: {ep.receive_all(blocking=False)}")
             # time.sleep(2)
 
     else:
