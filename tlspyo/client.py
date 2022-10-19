@@ -2,6 +2,7 @@ import logging
 import pickle as pkl
 import time
 
+from twisted.internet import task, defer
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
@@ -16,12 +17,10 @@ class ClientProtocol(Protocol):
         self._state = "HANDSHAKE"
 
     def connectionMade(self):
-        logging.info(f"Connection made.")
         assert self._state == "HANDSHAKE", f"Bad state: {self._state}"
         self._client.to_server = self
 
     def connectionLost(self, reason):
-        logging.info(f"Connection lost: {reason}")
         self._state = "DEAD"
         self._client.to_server = None
 
@@ -75,7 +74,6 @@ class ClientProtocol(Protocol):
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
         self.transport.write(data=msg)
-        # print(f"|||||||||||||||| Sending object {pkl.loads(obj) if isinstance(obj, bytes) else obj}")
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None, None))
@@ -101,11 +99,11 @@ class TLSClientFactory(ReconnectingClientFactory):
         return ClientProtocol(client=self._client, password=self.password, groups=self._groups, header_size=self._header_size)
 
     def clientConnectionLost(self, connector, reason):
-        logging.info(f'Lost connection.  Reason: {reason}')
+        logging.info(f'Lost connection.  Reason: {reason.getErrorMessage()}')
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
     def clientConnectionFailed(self, connector, reason):
-        logging.info(f'Connection failed. Reason: {reason}')
+        logging.info(f'Connection failed. Reason: {reason.getErrorMessage()}')
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
 
 
@@ -130,21 +128,43 @@ class Client:
 
         This is run in its own process.
         """
-        from twisted.internet.interfaces import IReadDescriptor
+        # from twisted.internet.interfaces import IReadDescriptor
         from twisted.internet import reactor
 
+        # Initialize the connections 
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForClientFactory(self))
         reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
+        
+        # Start the reactor
         self._reactor = reactor
-        self._reactor.run()  # main Twisted reactor loop
-        self._reactor = None  # clean when done
-        logging.info(f"Client reactor stopped, exiting process.")
+        reactor.run()
 
-    def close(self):
-        if self.to_server is not None:
-            self.to_server.transport.loseConnection()
-        if self._reactor is not None:
-            self._reactor.stop()
+        # When done, deallocate reactor memory
+        self._reactor = None
+
+    def check_acks(self):
+        """Returns true if we are not waiting for acknowledgements.
+
+        Returns:
+            bool: Whether the dictionary of pending acknowledgements is empty.
+        """
+        res = len(self.pending_acks.keys()) == 0 
+        return res
+
+    def close(self, counter):
+
+        # Check if we are allowed to leave by looking at acknowledgements
+        logging.debug(f"Attempting to terminate Endpoint for {counter}th time")
+
+        if self.check_acks():
+            if self._reactor is not None:
+                if self.to_server is not None:
+                    self.to_server.transport.loseConnection()
+                logging.info(f"Succesfully terminated endpoint connections")
+                self._reactor.stop()
+        else:
+            from twisted.internet import reactor
+            reactor.callLater(1, self.close, counter+1)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,6 @@ class LocalProtocolForServer(Protocol):
         assert self._state == "INIT", f"Bad state: {self._state}"
         groups = ('__server',)
         if self._server.check_new_client(groups=groups):
-            logging.info(f"Local: New client with groups {groups}.")
             self._identifier = self._server.add_client(groups=groups, client=self)
             self._state = "ALIVE"
         else:
@@ -26,7 +25,6 @@ class LocalProtocolForServer(Protocol):
             self.transport.abortConnection()
 
     def connectionLost(self, reason):
-        logging.info(f"Local: Connection lost: {reason}")
         if self._server.has_client(self._identifier):
             self._server.delete_client(self._identifier)
         assert not self._server.has_client(self._identifier)
@@ -42,19 +40,17 @@ class LocalProtocolForServer(Protocol):
                 while len(self._buffer) >= j:
                     cmd, _ = pkl.loads(self._buffer[i:j])
                     if cmd == "STOP":
-                        logging.info(f"Local: Stopping reactor.")
                         self.transport.loseConnection()
-                        self._server.close()
-                        logging.info(f"Local: Reactor stopped.")
+                        self._server.close(1)
                     else:
-                        logging.info(f"Local: Invalid command: {cmd}")
+                        logging.warning(f"Local: Invalid command: {cmd}")
                         self._state = "CLOSED"
                         self.transport.abortConnection()
                     # truncate the processed part of the buffer:
                     self._buffer = self._buffer[j:]
                     i, j = self.process_header()
         except Exception as e:
-            logging.info(f"Local: Unhandled exception: {e}")
+            logging.warning(f"Local: Unhandled exception: {e}")
             self._state = "KILLED"
             self.transport.abortConnection()
             raise e
@@ -82,9 +78,7 @@ class LocalProtocolForServerFactory(ClientFactory):
         return LocalProtocolForServer(self.server)
 
     def clientConnectionLost(self, connector, reason):
-        pass
-        # logging.info(f'Local: Client lost connection.  Reason: {reason}')
+        logging.info(f'Local: Client lost connection.  Reason: {reason.getErrorMessage()}')
 
     def clientConnectionFailed(self, connector, reason):
-        pass
-        # logging.info(f'Local: Client connection failed. Reason: {reason}')
+        logging.info(f'Local: Client connection failed. Reason: {reason.getErrorMessage()}')

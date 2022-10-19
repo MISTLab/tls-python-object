@@ -187,19 +187,15 @@ class Endpoint:
     def stop(self):
         # send STOP to the local server
         self._send_local(cmd='STOP', dest=None, obj=None)
-        logging.info("STOP: Sent command to stop")
 
         # Join the message reading thread
         with self.__socket_closed_lock:
             self.__socket_closed_flag = True
         self._t_manage_received_objects.join()
 
-        logging.info("STOP: Stop message reading thread")
-
         # join Twisted process and stop local server
         self._p.join()
 
-        logging.info("STOP: Joined twisted process")
         self._local_com_conn.close()
         self._local_com_srv.close()
         self._local_com_addr = None

@@ -5,6 +5,7 @@ import time
 from collections import deque
 
 from twisted.internet.protocol import Protocol, Factory
+from twisted.internet import task, defer
 from twisted.internet.endpoints import TCP4ServerEndpoint
 
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
@@ -26,7 +27,7 @@ class ServerProtocol(Protocol):
         self.send_obj(cmd="HELLO")
 
     def connectionLost(self, reason):
-        logging.info(f"Connection lost: {reason}")
+        logging.info(f"Connection lost: {reason.getErrorMessage()}")
         if self._server.has_client(self._identifier):
             self._server.delete_client(self._identifier)
         assert not self._server.has_client(self._identifier)
@@ -80,13 +81,13 @@ class ServerProtocol(Protocol):
                                 self.transport.loseConnection()
                         elif self._state == "ALIVE":
                             if cmd == "OBJ":
-                                logging.info(f"Received object {pkl.loads(obj)} from client {self._identifier} for groups {dest}.")
+                                logging.debug(f"Received object {pkl.loads(obj)} from client {self._identifier} for groups {dest}.")
                                 self.forward_obj_to_dest(obj=obj, dest=dest)
                             elif cmd == "NTF":
-                                logging.info(f"Received notification from client {self._identifier} for destination {dest}.")
+                                logging.debug(f"Received notification from client {self._identifier} for destination {dest}.")
                                 self.retrieve_consumables(groups=dest)
                             else:
-                                logging.info(f"Invalid command: {cmd}")
+                                logging.warning(f"Invalid command: {cmd}")
                                 self._state = "CLOSED"
                                 self.transport.loseConnection()
                     # truncate the processed part of the buffer:
@@ -95,7 +96,7 @@ class ServerProtocol(Protocol):
                     if self._state == "KILLED":
                         return
         except Exception as e:
-            logging.info(f"Unhandled exception: {e}")
+            logging.warning(f"Unhandled exception: {e}")
             self._state = "KILLED"
             self.transport.abortConnection()
             raise e
@@ -136,7 +137,7 @@ class ServerProtocol(Protocol):
 
     def dispatch_pending_consumables(self, group):
         # retrieve at most n available consumables from this group
-        logging.info(f"Dispatching consumables from group {group}.")
+        logging.debug(f"Dispatching consumables from group {group}.")
         if group in self._server.group_info.keys():
             d_group = self._server.group_info[group]
             to_consume = d_group['to_consume']
@@ -145,10 +146,10 @@ class ServerProtocol(Protocol):
                 while pending_consumers[id] > 0 and len(to_consume) > 0:
                     pending_consumers[id] -= 1
                     obj = to_consume.popleft()
-                    logging.info(f"Sending a consumable to client {id} from group {group} (remaining: {pending_consumers[id]}).")
+                    logging.debug(f"Sending a consumable to client {id} from group {group} (remaining: {pending_consumers[id]}).")
                     self._server.to_clients[id].send_obj(cmd='OBJ', obj=obj)
         else:
-            logging.info(f"Group {group} is not registered in the server.")
+            logging.warning(f"Group {group} is not registered in the server.")
 
     def send_all_consumables(self, group):
         # retrieve all available consumables from this group
@@ -157,7 +158,7 @@ class ServerProtocol(Protocol):
             to_consume = d_group['to_consume']
             pending_consumers = d_group['pending_consumers']
             while len(to_consume) > 0:
-                logging.info(f'Sending a consumable to client {self._identifier} from group {group}.')
+                logging.debug(f'Sending a consumable to client {self._identifier} from group {group}.')
                 obj = to_consume.popleft()
                 self.send_obj(cmd='OBJ', obj=obj)
 
@@ -172,11 +173,11 @@ class ServerProtocol(Protocol):
                         d_g['to_broadcast'] = obj
                         ids = d_g['ids']
                         for id_cli in ids:
-                            logging.info(f"Sending object {pkl.loads(obj)} from group {group} to identifier {id_cli}.")
+                            logging.debug(f"Sending object {pkl.loads(obj)} from group {group} to identifier {id_cli}.")
                             self._server.to_clients[id_cli].send_obj(cmd='OBJ', obj=obj)
                     elif value > 0:
                         # add object to group's consumables
-                        logging.info(f"Adding {value} copies of the consumable {pkl.loads(obj)} to group {group}.")
+                        logging.debug(f"Adding {value} copies of the consumable {pkl.loads(obj)} to group {group}.")
                         for _ in range(value):
                             d_g['to_consume'].append(obj)
                         self.dispatch_pending_consumables(group)
@@ -216,16 +217,20 @@ class Server:
 
         This is run in its own process.
         """
-        from twisted.internet.interfaces import IReadDescriptor
+        # from twisted.internet.interfaces import IReadDescriptor
         from twisted.internet import reactor
 
-        self._listener = TCP4ServerEndpoint(reactor, self._port)
-        self._listener.listen(ServerProtocolFactory(self))  # we pass the instance of Server to the Factory
+        # Start local communication
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForServerFactory(self))
+
+        # Start relay server
+        self.factory = ServerProtocolFactory(self)
+        reactor.listenTCP(self._port, self.factory)
+
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop
         self._reactor = None  # remove when done
-        logging.info(f"Server reactor stopped, exiting process.")
+
 
     def add_accepted_group(self, group, max_count=math.inf, max_consumables=None):
         """
@@ -264,11 +269,10 @@ class Server:
     def add_client(self, groups, client):
         identifier = self._id_cpt
         self._id_cpt += 1
-        logging.info(f"Adding client {identifier} to list of clients.")
         self.to_clients[identifier] = client
         for group in groups:
             if self.try_add_group(group):
-                logging.info(f"Adding client {identifier} to group {group}.")
+                logging.debug(f"Adding client {identifier} to group {group}.")
                 self.group_info[group]['ids'].append(identifier)
                 self.group_info[group]['pending_consumers'][identifier] = 0
         return identifier
@@ -299,23 +303,41 @@ class Server:
         for group, d_group in self.group_info.items():
             idents = d_group['ids']
             if identifier in idents:
-                logging.info(f"Removing client {identifier} from group {group}.")
+                logging.debug(f"Removing client {identifier} from group {group}.")
                 idents.remove(identifier)
                 del d_group['pending_consumers'][identifier]
-        logging.info(f"Removing client {identifier} from list of clients.")
+        logging.debug(f"Removing client {identifier} from list of clients.")
         del self.to_clients[identifier]
 
     def has_client(self, identifier):
         return identifier in self.to_clients
 
-    def close(self):
-        if self._reactor is not None:
-            identifiers = list(self.to_clients.keys())
-            for identifier in identifiers:
-                self.to_clients[identifier].transport.loseConnection()
-                self.delete_client(identifier)
-            self._reactor.stop()
+    def check_acks(self):
+        """Returns true if we are not waiting for acknowledgements.
 
+        Returns:
+            bool: Whether the dictionary of pending acknowledgements is empty.
+        """
+        res = len(self.pending_acks.keys()) == 0 
+        return res
+
+    def close(self, counter):
+
+        # Check if we are allowed to leave by looking at acknowledgements
+        logging.debug(f"Attempting to terminate Relay for {counter}th time")
+
+        if self.check_acks():
+            if self._reactor is not None:
+                identifiers = list(self.to_clients.keys())
+                for identifier in identifiers:
+                    self.to_clients[identifier].transport.loseConnection()
+                    self.delete_client(identifier)
+                logging.info(f"Succesfully terminated relay connections")
+                self._reactor.stop()
+        else:
+            from twisted.internet import reactor
+            reactor.callLater(1, self.close, counter+1)
+        
 
 if __name__ == "__main__":
     pass

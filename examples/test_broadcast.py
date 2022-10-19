@@ -29,7 +29,7 @@ class HelperTester:
             cpt += 1
 
         # Stop the endpoint
-        _ = self.queue2.get()
+        # _ = self.queue2.get()
         ep.stop()
 
     def relay_process(self):
@@ -81,13 +81,9 @@ class TestBroadcastObjects(unittest.TestCase):
         # Consume what is produced for us by pair
         cpt = 0
         while cpt < 50:
-            # print('Notifying')
             ep.notify(groups={"consumer1": 5})
-            # print('Starting to pop')
             res = ep.pop(max_items=1, blocking=True)
-            # print(f"res:{res}")
             self.assertEqual(res[0], cpt)
-            # print(cpt)
             cpt += 1
 
         # Stop the endpoint
