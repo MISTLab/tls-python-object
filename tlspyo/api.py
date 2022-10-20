@@ -1,22 +1,22 @@
 import queue
-import time
-from socket import AF_INET, SOCK_STREAM, socket
+from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, socket
 import pickle as pkl
-from threading import Thread, Lock, Event
+from threading import Thread, Lock
 from multiprocessing import Process
-from copy import deepcopy
-import signal
 
 from tlspyo.server import Server
 from tlspyo.client import Client
 
-from tlspyo.utils import get_from_queue, wait_event
-
-import logging
+from tlspyo.utils import get_from_queue
 
 
 class Relay:
-    def __init__(self, port, password, accepted_groups=None, local_com_port=2097, header_size=10):
+    def __init__(self,
+                 port: int,
+                 password: str,
+                 accepted_groups=None,
+                 local_com_port: int = 2097,
+                 header_size: int = 10):
         """
         `tlspyo` Relay.
 
@@ -28,21 +28,21 @@ class Relay:
 
         :param port: int: port of the Relay
         :param password: password of the Relay
-        :param accepted_groups: dict (default: None): If None, the Relay will accept Endpoints from all groups.
-            If not None, must be a dict where keys are groups and values are number of accepted clients.
-            Set the number of accepted
-        :param local_com_port: int: local port used for internal communication with Twisted
-        :param header_size: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
+        :param accepted_groups: object (default: None): groups accepted by the Relay.
+            If None, the Relay accepts any group.
+            Else, must be a dictionary where keys are groups and values are dictionaries with the following entries:
+                - 'max_count': max number of connected clients in the group (None for unlimited).
+                - 'max_consumables': max number of pending consumables in the group (None for unlimited).
+        :param local_com_port: int: local port used for internal communication with Twisted.
+        :param header_size: int: bytes to read at once from socket buffers (the default should work for most cases).
         """
-        assert isinstance(port, int), "port must be of type int."
-        assert isinstance(password, str), "password must be of type str."
-        assert accepted_groups is None or isinstance(accepted_groups, dict), "invalid accepted_groups format."
-        assert isinstance(local_com_port, int), "local_com_port must be of type int."
-        assert isinstance(header_size, int), "header_size must be of type int."
+
+        assert accepted_groups is None or isinstance(accepted_groups, dict), "Invalid format for accepted_groups."
 
         self._header_size = header_size
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
+        self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self._local_com_srv.bind(('127.0.0.1', self._local_com_port))
         self._local_com_srv.listen()
         self._server = Server(port=port,
@@ -72,7 +72,15 @@ class Relay:
 
 
 class Endpoint:
-    def __init__(self, ip_server, port, password, groups=None, local_com_port=2097, header_size=10, max_buf_len=4096):
+    def __init__(self,
+                 ip_server: str,
+                 port: int,
+                 password: str,
+                 groups=None,
+                 local_com_port:
+                 int = 2097,
+                 header_size: int = 10,
+                 max_buf_len: int = 4096):
         """
         tlspyo Endpoint.
 
@@ -90,16 +98,9 @@ class Endpoint:
         :param header_size: int: number of bytes used for the header (the default should be OK for most cases)
         :param max_buf_len: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
         """
-        assert isinstance(ip_server, str), "ip_server must be of type str."
-        assert isinstance(port, int), "port must be of type int."
-        assert isinstance(password, str), "password must be of type str."
-        assert isinstance(local_com_port, int), "local_com_port must be of type int."
-        assert isinstance(header_size, int), "header_size must be of type int."
 
         # threading for local object receiving
         self.__obj_buffer = queue.Queue()
-        # self.__obj_buffer_lock = Lock()
-        # self.__obj_buffer_event = Event()  # set when the buffer is not empty, cleared otherwise
         self.__socket_closed_lock = Lock() 
         self.__socket_closed_flag = False
     
@@ -110,6 +111,7 @@ class Endpoint:
         self._max_buf_len = max_buf_len
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
+        self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self._client = Client(ip_server=ip_server,
                               port_server=port,
                               password=password,
@@ -126,9 +128,6 @@ class Endpoint:
 
         self._t_manage_received_objects = Thread(target=self._manage_received_objects, daemon=True)
         self._t_manage_received_objects.start()
-
-        # TODO: change this for a proper handshake with the local socket:
-        # time.sleep(1.0)  # let things connect
 
         self._stopped = False
 
@@ -153,9 +152,6 @@ class Endpoint:
                 stamp, cmd, obj = pkl.loads(buf[i:j])
                 if cmd == "OBJ":
                     self.__obj_buffer.put(pkl.loads(obj))  # TODO: maxlen
-                    # with self.__obj_buffer_lock:
-                    #     self.__obj_buffer.append(pkl.loads(obj))
-                    #     self.__obj_buffer_event.set()  # before releasing lock
                 buf = buf[j:]
                 i, j = self._process_header(buf)
 

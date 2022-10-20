@@ -5,8 +5,6 @@ import time
 from collections import deque
 
 from twisted.internet.protocol import Protocol, Factory
-from twisted.internet import task, defer
-from twisted.internet.endpoints import TCP4ServerEndpoint
 
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
 
@@ -235,7 +233,7 @@ class Server:
         self._reactor.run()  # main Twisted reactor loop
         self._reactor = None  # remove when done
 
-    def add_accepted_group(self, group, max_count=math.inf, max_consumables=None):
+    def add_accepted_group(self, group, max_count=None, max_consumables=None):
         """
         Adds a new group name to accepted group names
 
@@ -264,7 +262,7 @@ class Server:
                     return False
                 if group in self.group_info.keys():
                     max_count = self._accepted_groups[group]['max_count']
-                    if len(self.group_info[group]['ids']) >= max_count:
+                    if max_count is not None and len(self.group_info[group]['ids']) >= max_count:
                         logging.info(f"Cannot add more clients to group {group}.")
                         return False
         return True
