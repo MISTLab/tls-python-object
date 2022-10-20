@@ -83,7 +83,7 @@ class Endpoint:
         self._t_manage_received_objects.start()
 
         # TODO: change this for a proper handshake with the local socket:
-        time.sleep(1.0)  # let things connect
+        # time.sleep(1.0)  # let things connect
 
         self._stopped = False
 

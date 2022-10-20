@@ -80,6 +80,9 @@ class ClientProtocol(Protocol):
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self.transport.write(data=msg)
 
+    def get_state(self):
+        return self._state
+
 
 class TLSClientFactory(ReconnectingClientFactory):
     protocol = ClientProtocol

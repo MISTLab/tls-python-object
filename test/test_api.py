@@ -1,3 +1,4 @@
+import time
 import unittest
 from utils import HelperTester
 
@@ -16,8 +17,8 @@ class TestAPI(unittest.TestCase):
         sr = self.ht.spawn_relay
         se = self.ht.spawn_endpoint
         _ = sr(accepted_groups=None) # Starts a relay that accepts all groups
-        prod = se(groups='group1')
         cons = se(groups='group2')
+        prod = se(groups='group1')
 
         # Checks for weird asynchronous behaviour when nothing has been sent yet
         res = cons.pop(blocking=False)
@@ -25,9 +26,11 @@ class TestAPI(unittest.TestCase):
 
         # Sends objects to a consumer 
         for i in range(NUM_OBJECTS):
-            prod.send_object(f"object {i}", destination='group2')
+            prod.produce(f"object {i}", group='group2')
 
         # Check that objects are received and popped in the right order
+        cons.notify(groups={'group2': 10})
+
         for i in range(NUM_OBJECTS):
             res = cons.pop(max_items=1, blocking=True)
             self.assertEqual(res[0], f"object {i}")
