@@ -224,13 +224,12 @@ class Server:
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForServerFactory(self))
 
         # Start relay server
-        self.factory = ServerProtocolFactory(self)
-        reactor.listenTCP(self._port, self.factory)
+        factory = ServerProtocolFactory(self)
+        reactor.listenTCP(self._port, factory)
 
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop
         self._reactor = None  # remove when done
-
 
     def add_accepted_group(self, group, max_count=math.inf, max_consumables=None):
         """

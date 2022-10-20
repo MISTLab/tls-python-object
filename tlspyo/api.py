@@ -17,6 +17,29 @@ import logging
 
 class Relay:
     def __init__(self, port, password, accepted_groups=None, local_com_port=2097, header_size=10):
+        """
+        `tlspyo` Relay.
+
+        Endpoints connect to a central Relay, which allows them to communicate in `tlspyo`.
+        When used on the Internet, the machine running the Relay must be directly visible from the Internet.
+        (Usually, if the machine is behind an Internet box/router, this involves port forwarding.)
+        PLEASE CAREFULLY READ THE SECURITY INSTRUCTIONS WHEN USING `tlspyo` ON THE INTERNET.
+        In particular, you will want to choose a strong password, and ideally use your own TLS certificate.
+
+        :param port: int: port of the Relay
+        :param password: password of the Relay
+        :param accepted_groups: dict (default: None): If None, the Relay will accept Endpoints from all groups.
+            If not None, must be a dict where keys are groups and values are number of accepted clients.
+            Set the number of accepted
+        :param local_com_port: int: local port used for internal communication with Twisted
+        :param header_size: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
+        """
+        assert isinstance(port, int), "port must be of type int."
+        assert isinstance(password, str), "password must be of type str."
+        assert accepted_groups is None or isinstance(accepted_groups, dict), "invalid accepted_groups format."
+        assert isinstance(local_com_port, int), "local_com_port must be of type int."
+        assert isinstance(header_size, int), "header_size must be of type int."
+
         self._header_size = header_size
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
@@ -50,6 +73,28 @@ class Relay:
 
 class Endpoint:
     def __init__(self, ip_server, port, password, groups=None, local_com_port=2097, header_size=10, max_buf_len=4096):
+        """
+        tlspyo Endpoint.
+
+        Endpoints in tlspyo are python objects that can securely send and receive Python object over the internet.
+
+        DISCLAIMER: We are not a security company, and we cannot guarantee that tlspyo is not hackable.
+        However, we believe tlspyo is fairly secure, as long as you use your own TLS certificate and a strong password.
+        IT IS IMPORTANT THAT YOU USE A STRONG PASSWORD WHEN YOUR MACHINE IS DIRECTLY VISIBLE FROM THE INTERNET.
+
+        :param ip_server: str: the IP address of the Relay (set to '127.0.0.1' for local testing)
+        :param port: int: the port of the Relay (use the same number for the Relay, it must be > 1024)
+        :param password: str: password of the Relay (use the same for the Relay, the stronger, the better)
+        :param groups: tuple of str, or str (default: None): groups in which this Endpoint is
+        :param local_com_port: local port used for internal communication with Twisted
+        :param header_size: int: number of bytes used for the header (the default should be OK for most cases)
+        :param max_buf_len: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
+        """
+        assert isinstance(ip_server, str), "ip_server must be of type str."
+        assert isinstance(port, int), "port must be of type int."
+        assert isinstance(password, str), "password must be of type str."
+        assert isinstance(local_com_port, int), "local_com_port must be of type int."
+        assert isinstance(header_size, int), "header_size must be of type int."
 
         # threading for local object receiving
         self.__obj_buffer = queue.Queue()
