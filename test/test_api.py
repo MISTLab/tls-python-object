@@ -64,13 +64,27 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(res2[0], "I'M FOR CONS2")
 
         # Check for inputs of notify
-        prod1.produce("TEST", group="cons1")
         self.assertRaises(AssertionError, lambda: cons1.notify(()))
         self.assertRaises(AssertionError, lambda: cons1.notify([]))
         self.assertRaises(AssertionError, lambda: cons1.notify({"": 0.5}))
         self.assertRaises(AssertionError, lambda: cons1.notify({3: "group3"}))
         self.assertRaises(AssertionError, lambda: cons1.notify(42))
         self.assertRaises(AssertionError, lambda: cons1.notify({}))
+
+        # Check for inputs of produce
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", 0))
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", 0.5))
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", {}))
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", ()))
+
+        # Check for inputs of send_object
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", ()))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", []))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", {"": 0.5}))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", {3: "group3"}))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", 42))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", {}))
+
 
     def test_read_with_receive(self):
         '''
