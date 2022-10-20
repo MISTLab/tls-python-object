@@ -194,6 +194,7 @@ class Endpoint:
             for k, v in groups.items():
                 assert isinstance(k, str), f"groups keys must be strings."
                 assert isinstance(v, int), f"groups values must be integers."
+        assert len(groups.keys()) > 0, f"Please specify at least one group to be notified"
         self._send_local(cmd='NTF', dest=groups, obj=None)
 
     def stop(self):
@@ -239,6 +240,8 @@ class Endpoint:
             Otherwise, the returned list may be empty.
         :return: list: returned items.
         """
+        assert max_items > 0, "Value of max_items must be > 0"
+
         cpy = []
         elem = get_from_queue(self.__obj_buffer, blocking)
         assert len(elem) == 0 or blocking, 'Issue in pop'
