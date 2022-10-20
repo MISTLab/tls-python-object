@@ -140,7 +140,7 @@ class TestAPI(unittest.TestCase):
 
         # Producer sends objects
         for i in range(NUM_OBJECTS):
-            prod.send_object(f"object {i}", destination='group2')
+            prod.broadcast(f"object {i}", 'group2')
 
         # Tests that we have received all objects after a reasonable delay
         res = cons.get_last(max_items=5, blocking=True)
@@ -148,8 +148,7 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(len(res), 5)
 
         # Checks that we have received all objects in the right order
-        for i in range(1, 6):
-            self.assertEqual(res[-i], f"object {10-i}")
+        self.assertEqual(res[-1], "object 9")
         
 
     def tearDown(self):
