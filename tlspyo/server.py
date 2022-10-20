@@ -119,6 +119,7 @@ class ServerProtocol(Protocol):
                 if self._identifier in d_group['ids']:
                     to_broadcast = d_group['to_broadcast']
                     if to_broadcast is not None:
+                        logging.debug("Sending object {to_broadcast} from retrieve broadcast")
                         self.send_obj(cmd='OBJ', obj=to_broadcast)
 
     def retrieve_consumables(self, groups):
@@ -181,6 +182,9 @@ class ServerProtocol(Protocol):
                         for _ in range(value):
                             d_g['to_consume'].append(obj)
                         self.dispatch_pending_consumables(group)
+
+    def get_state(self):
+        return self._state
 
 
 class ServerProtocolFactory(Factory):
@@ -291,6 +295,7 @@ class Server:
         return True
 
     def add_group(self, group, max_consumables=None):
+        logging.debug(f"Adding group {group} to relay")
         if group not in self.group_info.keys():
             self.group_info[group] = {'ids': [],  # ids of the clients present in this group
                                       'to_broadcast': None,  # object to broadcast

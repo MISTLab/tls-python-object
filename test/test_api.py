@@ -1,3 +1,4 @@
+import time
 import unittest
 from utils import HelperTester
 
@@ -16,8 +17,8 @@ class TestAPI(unittest.TestCase):
         sr = self.ht.spawn_relay
         se = self.ht.spawn_endpoint
         _ = sr(accepted_groups=None) # Starts a relay that accepts all groups
-        prod = se(groups='group1')
         cons = se(groups='group2')
+        prod = se(groups='group1')
 
         # Checks for weird asynchronous behaviour when nothing has been sent yet
         res = cons.pop(blocking=False)
@@ -25,9 +26,11 @@ class TestAPI(unittest.TestCase):
 
         # Sends objects to a consumer 
         for i in range(NUM_OBJECTS):
-            prod.send_object(f"object {i}", destination='group2')
+            prod.produce(f"object {i}", group='group2')
 
         # Check that objects are received and popped in the right order
+        cons.notify(groups={'group2': 10})
+
         for i in range(NUM_OBJECTS):
             res = cons.pop(max_items=1, blocking=True)
             self.assertEqual(res[0], f"object {i}")
@@ -64,13 +67,27 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(res2[0], "I'M FOR CONS2")
 
         # Check for inputs of notify
-        prod1.produce("TEST", group="cons1")
         self.assertRaises(AssertionError, lambda: cons1.notify(()))
         self.assertRaises(AssertionError, lambda: cons1.notify([]))
         self.assertRaises(AssertionError, lambda: cons1.notify({"": 0.5}))
         self.assertRaises(AssertionError, lambda: cons1.notify({3: "group3"}))
         self.assertRaises(AssertionError, lambda: cons1.notify(42))
         self.assertRaises(AssertionError, lambda: cons1.notify({}))
+
+        # Check for inputs of produce
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", 0))
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", 0.5))
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", {}))
+        self.assertRaises(AssertionError, lambda: prod1.produce("TEST", ()))
+
+        # Check for inputs of send_object
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", ()))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", []))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", {"": 0.5}))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", {3: "group3"}))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", 42))
+        self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", {}))
+
 
     def test_read_with_receive(self):
         '''

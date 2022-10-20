@@ -34,7 +34,7 @@ class LocalProtocolForClient(Protocol):
                         self._client.close(1)
                     elif cmd in ("OBJ", "NTF"):
                         # send the object to the central relay
-                        if self._client.to_server is not None and self._state == "ALIVE":
+                        if self._client.to_server is not None and self._state == "ALIVE" and self._client.to_server.get_state() == "ALIVE":
                             self._client.to_server.send_obj(cmd=cmd, dest=dest, obj=obj_bytes)
                         else:
                             logging.warning('The client is not connected to the Internet server, storing message.')
