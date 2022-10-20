@@ -168,6 +168,17 @@ class Endpoint:
         assert isinstance(group, str), f"group must be a string, not {type(group)}"
         self.send_object(obj=obj, destination={group: 1})
 
+    def broadcast(self, obj, group):
+        """Alias for send_object(obj=obj, destination={group: -1})
+        Note that broadcasting an object overrides the previous brodcast object
+        Args:
+            obj (object): object to send to be broadcast to entire group
+            group (str): destination group to which the object should be broadcast.
+        """
+        assert isinstance(group, str), f"group must be a string, not {type(group)}"
+        self.send_object(obj=obj, destination={group: -1})
+
+
     def notify(self, groups):
         """
         Notifies the Relay that the Endpoint is ready to retrieve consumables from destination groups.
