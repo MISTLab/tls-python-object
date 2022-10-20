@@ -159,7 +159,7 @@ class Client:
         # Check if we are allowed to leave by looking at acknowledgements
         logging.debug(f"Attempting to terminate Endpoint for {counter}th time")
 
-        if self.check_acks():
+        if self.check_acks() or counter > 10:
             if self._reactor is not None:
                 if self.to_server is not None:
                     self.to_server.transport.loseConnection()

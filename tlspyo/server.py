@@ -328,7 +328,7 @@ class Server:
         # Check if we are allowed to leave by looking at acknowledgements
         logging.debug(f"Attempting to terminate Relay for {counter}th time")
 
-        if self.check_acks():
+        if self.check_acks() or counter > 10:
             if self._reactor is not None:
                 identifiers = list(self.to_clients.keys())
                 for identifier in identifiers:
