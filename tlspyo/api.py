@@ -30,19 +30,26 @@ class Relay:
         self._p = Process(target=self._server.run, args=())
         self._p.start()
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
+        self._stopped = False
+
+    def __del__(self):
+        self.stop()
 
     def stop(self):
-        msg = pkl.dumps(('STOP', None))
-        msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-        self._local_com_conn.sendall(msg)
+        if not self._stopped:
+            self._stopped = True
+            msg = pkl.dumps(('STOP', None))
+            msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
+            self._local_com_conn.sendall(msg)
 
-        self._p.join()
-        self._local_com_conn.close()
-        self._local_com_addr = None
+            self._p.join()
+            self._local_com_conn.close()
+            self._local_com_srv.close()
+            self._local_com_addr = None
 
 
 class Endpoint:
-    def __init__(self, ip_server, port_server, password, groups=None, local_com_port=2097, header_size=10, max_buf_len=4096):
+    def __init__(self, ip_server, port, password, groups=None, local_com_port=2097, header_size=10, max_buf_len=4096):
 
         # threading for local object receiving
         self.__obj_buffer = queue.Queue()
@@ -59,7 +66,7 @@ class Endpoint:
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
         self._client = Client(ip_server=ip_server,
-                              port_server=port_server,
+                              port_server=port,
                               password=password,
                               groups=groups,
                               local_com_port=local_com_port,
@@ -77,6 +84,11 @@ class Endpoint:
 
         # TODO: change this for a proper handshake with the local socket:
         time.sleep(1.0)  # let things connect
+
+        self._stopped = False
+
+    def __del__(self):
+        self.stop()
 
     def _manage_received_objects(self):
         """
@@ -185,20 +197,22 @@ class Endpoint:
         self._send_local(cmd='NTF', dest=groups, obj=None)
 
     def stop(self):
-        # send STOP to the local server
-        self._send_local(cmd='STOP', dest=None, obj=None)
+        if not self._stopped:
+            self._stopped = True
+            # send STOP to the local server
+            self._send_local(cmd='STOP', dest=None, obj=None)
 
-        # Join the message reading thread
-        with self.__socket_closed_lock:
-            self.__socket_closed_flag = True
-        self._t_manage_received_objects.join()
+            # Join the message reading thread
+            with self.__socket_closed_lock:
+                self.__socket_closed_flag = True
+            self._t_manage_received_objects.join()
 
-        # join Twisted process and stop local server
-        self._p.join()
+            # join Twisted process and stop local server
+            self._p.join()
 
-        self._local_com_conn.close()
-        self._local_com_srv.close()
-        self._local_com_addr = None
+            self._local_com_conn.close()
+            self._local_com_srv.close()
+            self._local_com_addr = None
 
     def receive_all(self, blocking=False):
         """
@@ -251,7 +265,8 @@ class Endpoint:
         """
         cpy = []
         elem = get_from_queue(self.__obj_buffer, blocking)
+        assert len(elem) == 0 or blocking, 'Issue in get_last'
         while len(elem) > 0:
             cpy += elem
             elem = get_from_queue(self.__obj_buffer, blocking=False)
-        return cpy[max_items:]
+        return cpy[-max_items:]
