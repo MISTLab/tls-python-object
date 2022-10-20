@@ -1,44 +1,5 @@
-from pydoc import Helper
 import unittest
-from threading import Thread, Lock
-import queue
-
-from tlspyo.api import Endpoint, Relay
-import time
-
-RELAY_PORT = 22222
-LOCAL_PORT_START = 33333
-PASSWORD = "Xdha8&89a;/.a,][||=-/.,?><"
-RELAY_IP = '127.0.0.1'
-HEADER_SIZE = 12
-
-
-class HelperTester:
-    def __init__(self):
-        self.next_local_port = LOCAL_PORT_START
-
-    def spawn_endpoint(self, groups):
-        ep = Endpoint(
-            ip_server=RELAY_IP,
-            port=RELAY_PORT,
-            password=PASSWORD,
-            groups=groups,
-            local_com_port=self.next_local_port,
-            header_size=HEADER_SIZE
-        )
-        self.next_local_port += 1
-        return ep
-
-    def spawn_relay(self, accepted_groups):
-        re = Relay(
-            port=RELAY_PORT,
-            password=PASSWORD,
-            accepted_groups=accepted_groups,
-            local_com_port=self.next_local_port,
-            header_size=HEADER_SIZE
-        )
-        self.next_local_port += 1
-        return re
+from utils import HelperTester
 
 
 class TestGroups(unittest.TestCase):
@@ -56,6 +17,8 @@ class TestGroups(unittest.TestCase):
         ep3 = se(groups='group3')
         ep4 = se(groups='group5')
         ep5 = se(groups=('group6', 'group5', 'group1'))
+
+        # test broadcasting
 
         ep5.send_object(obj='test1', destination='group1')
         r = ep1.pop(blocking=True)
@@ -83,6 +46,12 @@ class TestGroups(unittest.TestCase):
         r = ep1.pop(blocking=True)
         self.assertEqual(len(r), 1, f"r:{r}")
         self.assertEqual(r[0], 'test4', f"r:{r}")
+        r = ep2.pop(blocking=True)
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test4', f"r:{r}")
+        r = ep4.pop(blocking=True)
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test4', f"r:{r}")
         r = []
         while len(r) < 6:
             r += ep5.receive_all(blocking=True)
@@ -93,9 +62,6 @@ class TestGroups(unittest.TestCase):
         self.assertEqual(r[3], 'test4', f"r:{r}")
         self.assertEqual(r[4], 'test4', f"r:{r}")
         self.assertEqual(r[5], 'test4', f"r:{r}")
-        r = ep4.get_last(blocking=True)
-        self.assertEqual(len(r), 1, f"r:{r}")
-        self.assertEqual(r[0], 'test4', f"r:{r}")
 
         ep1.send_object(obj='test5', destination='group3')
         ep1.send_object(obj='test6', destination='group3')
@@ -106,15 +72,30 @@ class TestGroups(unittest.TestCase):
             self.assertEqual(len(r), 1, f"r:{r}")
         self.assertEqual(r[0], 'test6', f"r:{r}")
 
-        ep1.stop()
-        ep2.stop()
-        ep3.stop()
-        ep4.stop()
-        ep5.stop()
-        relay.stop()
+        # test producing
+
+        ep1.produce(obj='test7', group='group3')
+        ep3.notify(groups='group3')
+        r = ep3.pop(blocking=True)
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test7', f"r:{r}")
+
+        ep1.send_object(obj='test8', destination={'group1': 3})
+        ep1.notify(groups='group1')
+        ep2.notify(groups='group1')
+        ep5.notify(groups='group1')
+        r = ep1.pop(blocking=True)
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test8', f"r:{r}")
+        r = ep2.pop(blocking=True)
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test8', f"r:{r}")
+        r = ep5.pop(blocking=True)
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test8', f"r:{r}")
 
     def tearDown(self):
-        pass
+        self.ht.clear()
 
 
 if __name__ == '__main__':

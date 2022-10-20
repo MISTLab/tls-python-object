@@ -1,6 +1,7 @@
 import signal
 import queue
 
+
 def wait_event(event):
     """
     Workaround for an Event bug on Windows.
