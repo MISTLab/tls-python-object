@@ -40,7 +40,7 @@ class TestAPI(unittest.TestCase):
         self.assertRaises(AssertionError, lambda : cons.pop(max_items=0, blocking=False))
 
 
-    def test_produce_notify(self):
+    def test_produce_notify_broadcast(self):
         sr = self.ht.spawn_relay
         se = self.ht.spawn_endpoint
         _ = sr(accepted_groups=None) # Starts a relay that accepts all groups
@@ -66,6 +66,11 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(res1[0], "I'M FOR CONS1")
         self.assertEqual(res2[0], "I'M FOR CONS2")
 
+        # Check that a broadcast object is received on the other end
+        prod1.broadcast("TEST", "cons1")
+        res = cons1.pop(blocking=True)
+        self.assertEqual(res[0], "TEST")
+
         # Check for inputs of notify
         self.assertRaises(AssertionError, lambda: cons1.notify(()))
         self.assertRaises(AssertionError, lambda: cons1.notify([]))
@@ -73,6 +78,12 @@ class TestAPI(unittest.TestCase):
         self.assertRaises(AssertionError, lambda: cons1.notify({3: "group3"}))
         self.assertRaises(AssertionError, lambda: cons1.notify(42))
         self.assertRaises(AssertionError, lambda: cons1.notify({}))
+
+        # Check for inputs of broadcast
+        self.assertRaises(AssertionError, lambda: prod1.broadcast("TEST", 0))
+        self.assertRaises(AssertionError, lambda: prod1.broadcast("TEST", 0.5))
+        self.assertRaises(AssertionError, lambda: prod1.broadcast("TEST", {}))
+        self.assertRaises(AssertionError, lambda: prod1.broadcast("TEST", ()))
 
         # Check for inputs of produce
         self.assertRaises(AssertionError, lambda: prod1.produce("TEST", 0))
@@ -103,9 +114,10 @@ class TestAPI(unittest.TestCase):
         res = cons.receive_all(blocking=False)
         self.assertEqual(len(res), 0)
 
+        cons.notify(groups={"group2": 10})
         # Producer sends objects
         for i in range(NUM_OBJECTS):
-            prod.send_object(f"object {i}", destination='group2')
+            prod.produce(f"object {i}", 'group2')
 
         # Tests that we have received all objects after a reasonable delay
         res = cons.receive_all(blocking=True)
@@ -129,16 +141,13 @@ class TestAPI(unittest.TestCase):
 
         # Producer sends objects
         for i in range(NUM_OBJECTS):
-            prod.send_object(f"object {i}", destination='group2')
+            prod.broadcast(f"object {i}", 'group2')
 
         # Tests that we have received all objects after a reasonable delay
         res = cons.get_last(max_items=5, blocking=True)
-        # Checks that we have received all objects 
-        self.assertEqual(len(res), 5)
 
         # Checks that we have received all objects in the right order
-        for i in range(1, 6):
-            self.assertEqual(res[-i], f"object {10-i}")
+        self.assertEqual(res[-1], "object 9")
         
 
     def tearDown(self):
