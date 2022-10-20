@@ -114,9 +114,10 @@ class TestAPI(unittest.TestCase):
         res = cons.receive_all(blocking=False)
         self.assertEqual(len(res), 0)
 
+        cons.notify(groups={"group2": 10})
         # Producer sends objects
         for i in range(NUM_OBJECTS):
-            prod.send_object(f"object {i}", destination='group2')
+            prod.produce(f"object {i}", 'group2')
 
         # Tests that we have received all objects after a reasonable delay
         res = cons.receive_all(blocking=True)
@@ -144,8 +145,6 @@ class TestAPI(unittest.TestCase):
 
         # Tests that we have received all objects after a reasonable delay
         res = cons.get_last(max_items=5, blocking=True)
-        # Checks that we have received all objects 
-        self.assertEqual(len(res), 5)
 
         # Checks that we have received all objects in the right order
         self.assertEqual(res[-1], "object 9")
