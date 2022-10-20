@@ -155,6 +155,7 @@ class Endpoint:
             for k, v in destination.items():
                 assert isinstance(k, str), f"destination keys must be strings."
                 assert isinstance(v, int), f"destination values must be integers."
+        assert len(destination.keys()) > 0, f"Please specify at least one group to be notified"
         self._send_local(cmd='OBJ', dest=destination, obj=obj)
 
     def produce(self, obj, group):
