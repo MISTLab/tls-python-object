@@ -5,6 +5,7 @@ import time
 from collections import deque
 
 from twisted.internet.protocol import Protocol, Factory
+from twisted.internet import ssl
 
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
 
@@ -104,12 +105,12 @@ class ServerProtocol(Protocol):
         msg = pkl.dumps((self._server.ack_stamp, cmd, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self._server.pending_acks[self._server.ack_stamp] = (time.monotonic(), msg)
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def retrieve_broadcast(self):
         if self._identifier is not None:
@@ -227,7 +228,8 @@ class Server:
 
         # Start relay server
         factory = ServerProtocolFactory(self)
-        reactor.listenTCP(self._port, factory)
+        context = ssl.DefaultOpenSSLContextFactory('keys/private.key', 'keys/selfsigned.crt')
+        reactor.listenSSL(self._port, factory, context)
 
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop

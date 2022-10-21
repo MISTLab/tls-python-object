@@ -2,7 +2,7 @@ import logging
 import pickle as pkl
 import time
 
-from twisted.internet import task, defer
+from twisted.internet import task, defer, ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
@@ -61,7 +61,7 @@ class ClientProtocol(Protocol):
                             logging.debug(f"Received object, transferring to local EndPoint.")
                             # transfer the object to the EndPoint server
                             if self._client.endpoint is not None:
-                                self._client.endpoint.transport.write(data=self._buffer[:j])
+                                self._client.endpoint.transport.write(self._buffer[:j])
                             else:
                                 logging.warning(f"Local EndPoint is not connected, discarding object.")
                 # truncate the processed part of the buffer:
@@ -73,12 +73,12 @@ class ClientProtocol(Protocol):
         msg = pkl.dumps((self._client.ack_stamp, cmd, dest, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None, None))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def get_state(self):
         return self._state
@@ -134,9 +134,16 @@ class Client:
         # from twisted.internet.interfaces import IReadDescriptor
         from twisted.internet import reactor
 
-        # Initialize the connections 
+        # Initialize the local connection
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForClientFactory(self))
-        reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
+
+        # Initialize the TLS connection
+        reactor.connectSSL(
+            host=self._ip_server, 
+            port=self._port_server, 
+            factory=TLSClientFactory(client=self),
+            contextFactory=ssl.ClientContextFactory()
+        )
         
         # Start the reactor
         self._reactor = reactor
