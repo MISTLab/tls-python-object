@@ -39,6 +39,8 @@ class LocalProtocolForClient(Protocol):
                         else:
                             logging.warning('The client is not connected to the Internet server, storing message.')
                             self._client.store.append((cmd, dest, obj_bytes))
+                    elif cmd == 'TEST':
+                        pass
                     else:
                         logging.warning(f"Local: Invalid command: {cmd}")
                         self._state = "CLOSED"

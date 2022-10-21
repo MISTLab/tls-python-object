@@ -245,8 +245,6 @@ class Server:
             self._accepted_groups = {}
         self._accepted_groups[group] = {'max_count': max_count,
                                         'max_consumables': max_consumables}
-        self._accepted_groups['__server'] = {'max_count': 1,
-                                             'max_consumables': None}
 
     def check_new_client(self, groups):
         """

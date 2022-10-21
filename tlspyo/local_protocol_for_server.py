@@ -15,14 +15,7 @@ class LocalProtocolForServer(Protocol):
 
     def connectionMade(self):
         assert self._state == "INIT", f"Bad state: {self._state}"
-        groups = ('__server',)
-        if self._server.check_new_client(groups=groups):
-            self._identifier = self._server.add_client(groups=groups, client=self)
-            self._state = "ALIVE"
-        else:
-            logging.info(f"Local: Connection could not be validated.")
-            self._state = "CLOSED"
-            self.transport.abortConnection()
+        self._state = "ALIVE"
 
     def connectionLost(self, reason):
         if self._server.has_client(self._identifier):
@@ -42,6 +35,8 @@ class LocalProtocolForServer(Protocol):
                     if cmd == "STOP":
                         self.transport.loseConnection()
                         self._server.close(1)
+                    elif cmd == 'TEST':
+                        pass
                     else:
                         logging.warning(f"Local: Invalid command: {cmd}")
                         self._state = "CLOSED"

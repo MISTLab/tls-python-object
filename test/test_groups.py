@@ -28,7 +28,7 @@ class TestGroups(unittest.TestCase):
         ep3 = se(groups='group3')
         ep4 = se(groups='group5')
         ep5 = se(groups=('group6', 'group5', 'group1'))
-        time.sleep(1.0)  # let everyone connect so that old broadcasts are not lost for new clients
+        time.sleep(1.0)  # let everyone handshake the relay so that broadcasts don't get overwritten before that
 
         # test broadcasting
 
@@ -145,13 +145,29 @@ class TestGroups(unittest.TestCase):
 
         # test broadcasting
 
-        # should not send as ep5 is not connected
-        ep5.send_object(obj='test1', destination='group1')
+        ep5.send_object(obj='test1', destination='group1')  # should not send as ep5 is not connected
+        # (the previous line should also output a warning)
         time.sleep(0.5)
         r = ep1.pop(blocking=False)  # not connected so should not receive
         self.assertEqual(len(r), 0, f"r:{r}")
-        r = ep2.pop(blocking=False)  # should not receive since nothing should be sent
+        r = ep2.pop(blocking=False)  # should not receive since nothing should have been be sent
         self.assertEqual(len(r), 0, f"r:{r}")
+
+        ep4.send_object(obj='test2', destination='group1')  # should send
+        time.sleep(0.5)
+        r = ep1.pop(blocking=False)  # not connected so should not receive
+        self.assertEqual(len(r), 0, f"r:{r}")
+        r = ep2.pop(blocking=True)  # should receive
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test2')
+
+        ep2.produce(obj='test3', group='group2')
+        ep3.notify(groups='group2')
+        r = []
+        while len(r) < 2:
+            r += ep3.receive_all(blocking=True)
+        self.assertEqual(len(r), 2, f"r:{r}")
+        self.assertTrue(same_lists_no_order(r, ['test2', 'test3']), f"r:{r}")
 
     def tearDown(self):
         self.ht.clear()

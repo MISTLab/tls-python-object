@@ -53,17 +53,21 @@ class Relay:
         self._p = Process(target=self._server.run, args=())
         self._p.start()
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
+        self._send_local('TEST')
         self._stopped = False
 
     def __del__(self):
         self.stop()
 
+    def _send_local(self, cmd):
+        msg = pkl.dumps((cmd, None))
+        msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
+        self._local_com_conn.sendall(msg)
+
     def stop(self):
         if not self._stopped:
             self._stopped = True
-            msg = pkl.dumps(('STOP', None))
-            msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-            self._local_com_conn.sendall(msg)
+            self._send_local('STOP')
 
             self._p.join()
             self._local_com_conn.close()
@@ -125,6 +129,7 @@ class Endpoint:
         self._p = Process(target=self._client.run, args=())
         self._p.start()
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
+        self._send_local(cmd='TEST')
 
         self._t_manage_received_objects = Thread(target=self._manage_received_objects, daemon=True)
         self._t_manage_received_objects.start()
@@ -163,7 +168,7 @@ class Endpoint:
         j = i + data_len
         return i, j
 
-    def _send_local(self, cmd, dest, obj):
+    def _send_local(self, cmd, dest=None, obj=None):
         msg = pkl.dumps((cmd, dest, pkl.dumps(obj)))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self._local_com_conn.sendall(msg)
@@ -218,7 +223,6 @@ class Endpoint:
         """
         assert isinstance(group, str), f"group must be a string, not {type(group)}"
         self.send_object(obj=obj, destination={group: -1})
-
 
     def notify(self, groups):
         """
