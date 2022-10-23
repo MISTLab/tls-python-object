@@ -2,7 +2,7 @@ import logging
 import pickle as pkl
 import time
 
-from twisted.internet import task, defer, ssl
+from twisted.internet import ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
@@ -111,7 +111,14 @@ class TLSClientFactory(ReconnectingClientFactory):
 
 
 class Client:
-    def __init__(self, ip_server, port_server, password, header_size=10, groups=None, local_com_port=2097):
+    def __init__(self,
+                 ip_server,
+                 port_server,
+                 password,
+                 header_size=10,
+                 groups=None,
+                 local_com_port=2097,
+                 connection="TLS"):
         self.groups = groups
         self._ip_server = ip_server
         self._port_server = port_server
@@ -124,6 +131,7 @@ class Client:
         self.store = []
         self.ack_stamp = 0
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
+        self._connection = connection
 
     def run(self):
         """
@@ -137,13 +145,18 @@ class Client:
         # Initialize the local connection
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForClientFactory(self))
 
-        # Initialize the TLS connection
-        reactor.connectSSL(
-            host=self._ip_server, 
-            port=self._port_server, 
-            factory=TLSClientFactory(client=self),
-            contextFactory=ssl.ClientContextFactory()
-        )
+        # Initialize the Internet connection
+        if self._connection == "TCP":
+            reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
+        elif self._connection == "TLS":
+            reactor.connectSSL(
+                host=self._ip_server,
+                port=self._port_server,
+                factory=TLSClientFactory(client=self),
+                contextFactory=ssl.ClientContextFactory()
+            )
+        else:
+            logging.warning(f"Unsupported connection: {self._connection}")
         
         # Start the reactor
         self._reactor = reactor

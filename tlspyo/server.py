@@ -1,5 +1,4 @@
 import logging
-import math
 import pickle as pkl
 import time
 from collections import deque
@@ -199,7 +198,13 @@ class ServerProtocolFactory(Factory):
 
 
 class Server:
-    def __init__(self, port, password, accepted_groups=None, header_size=10, local_com_port=2097):
+    def __init__(self,
+                 port,
+                 password,
+                 accepted_groups=None,
+                 header_size=10,
+                 local_com_port=2097,
+                 connection="TLS"):
         self._port = port
         self._local_com_port = local_com_port
         assert self._local_com_port != self._port, f"Internet and local ports are the same ({self._port})."
@@ -213,6 +218,7 @@ class Server:
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
         self._reactor = None
         self._listener = None
+        self._connection = connection
 
     def run(self):
         """
@@ -228,8 +234,14 @@ class Server:
 
         # Start relay server
         factory = ServerProtocolFactory(self)
-        context = ssl.DefaultOpenSSLContextFactory('keys/private.key', 'keys/selfsigned.crt')
-        reactor.listenSSL(self._port, factory, context)
+        if self._connection == "TCP":
+            reactor.listenTCP(self._port, factory)
+        elif self._connection == "TLS":
+            context = ssl.DefaultOpenSSLContextFactory('keys/private.key', 'keys/selfsigned.crt')
+            reactor.listenSSL(self._port, factory, context)
+        else:
+            logging.warning(f"Unsupported connection: {self._connection}")
+            return
 
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop
