@@ -3,16 +3,12 @@
 
 This library provides an easy-to-use API to transfer python objects over the network in a safe, efficient way. It provides a flexible interface to manage communication between multiple nodes with different roles over a network. It was designed to allow for efficient development of learning infrastructure but is modular enough to be used for any projet where secure and efficient network transfers between multiple computers is required. **Tlspyo** is used in large projects involving hyperparameter tuning and deep reinforcement learning at the MIST Lab.
 
-1. [Getting Started] (#getting_started)
-   1. [A Simple Producer-Consumer Example] (#producer_consumer_example)
-2. [Security] (#security)
-
 ## Getting Started <a name="getting_started"></a>
 Transferring objects using this library is done using two types of objects: 
 * A **Relay** is the center point of all communication and is used for the management of the transfer of objects to different groups in different ways. The relay must always be up at any time for communication to be succesful between endpoints.
 * An **Endpoint** represents one of the nodes in your network. It can behave in a multitude of ways including broadcasting objects to whole groups or producing objects that can be consumed by other endpoints. an Endpoint can be set up to serve as a producer, a consumer, a compute node...
 
-After installing **tlspyo** using `pip install tlspyo`, you can get started with the following simple example that illustrates some of the behavior of this library.
+After installing **tlspyo** using `pip install tlspyo`, you can get started with the following simple example that explains some of the behavior of this library.
 
 ### A simple Producer-Consumer example <a name="producer_consumer_example"></a>
 In this set up, one of the nodes in your network will be used to produce objets while the other will be used to consume objects by printing them.
