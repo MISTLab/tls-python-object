@@ -8,6 +8,9 @@ def cert_gen(
     validityEndInSeconds=10*365*24*60*60,
     KEY_FILE = "keys/private.key",
     CERT_FILE="keys/selfsigned.crt"):
+
+    if not os.path.isdir(os.path.abspath("keys")):
+        os.mkdir("keys")
     #can look at generated file using openssl:
     #openssl x509 -inform pem -in selfsigned.crt -noout -text
     # create a key pair
@@ -28,6 +31,4 @@ def cert_gen(
 
 
 if __name__ == '__main__':
-    if not os.path.isdir(os.path.abspath("keys")):
-        os.mkdir("keys")
     cert_gen()

@@ -3,6 +3,7 @@ from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, socket
 import pickle as pkl
 from threading import Thread, Lock
 from multiprocessing import Process
+import os
 
 from tlspyo.server import Server
 from tlspyo.client import Client
@@ -20,7 +21,8 @@ class Relay:
                  accepted_groups=None,
                  local_com_port: int = 2097,
                  header_size: int = 10,
-                 connection: str = DEFAULT_CONNECTION):
+                 connection: str = DEFAULT_CONNECTION,
+                 keys_dir: str = None):
         """
         `tlspyo` Relay.
 
@@ -54,12 +56,14 @@ class Relay:
         self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self._local_com_srv.bind(('127.0.0.1', self._local_com_port))
         self._local_com_srv.listen()
+        keys_dir = os.path.abspath(keys_dir) if keys_dir is not None else keys_dir
         self._server = Server(port=port,
                               password=password,
                               accepted_groups=accepted_groups,
                               local_com_port=local_com_port,
                               header_size=header_size,
-                              connection=connection)
+                              connection=connection,
+                              keys_dir=keys_dir)
         self._p = Process(target=self._server.run, args=())
         self._p.start()
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
