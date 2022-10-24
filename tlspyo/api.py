@@ -10,6 +10,9 @@ from tlspyo.client import Client
 from tlspyo.utils import get_from_queue
 
 
+DEFAULT_CONNECTION = "TLS"
+
+
 class Relay:
     def __init__(self,
                  port: int,
@@ -17,7 +20,7 @@ class Relay:
                  accepted_groups=None,
                  local_com_port: int = 2097,
                  header_size: int = 10,
-                 connection: str = "TCP"):
+                 connection: str = DEFAULT_CONNECTION):
         """
         `tlspyo` Relay.
 
@@ -91,7 +94,7 @@ class Endpoint:
                  local_com_port: int = 2097,
                  header_size: int = 10,
                  max_buf_len: int = 4096,
-                 connection: str = "TCP"):
+                 connection: str = DEFAULT_CONNECTION):
         """
         tlspyo Endpoint.
 
