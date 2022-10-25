@@ -1,6 +1,8 @@
 import logging
 import pickle as pkl
 import time
+import OpenSSL
+import os
 
 from twisted.internet import ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
@@ -149,6 +151,19 @@ class Client:
         if self._connection == "TCP":
             reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
         elif self._connection == "TLS":
+            # Use default keys if none are provided
+            # self_signed = os.path.join(self._keys_dir, 'selfsigned.crt') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'selfsigned.crt')
+            # Authenticates the server to all potential clients for TLS communication
+            # try:
+            #     certData = OpenSSL.crypto.load_certificate(
+            #         OpenSSL.crypto.FILETYPE_PEM, 
+            #         open(self_signed).read()
+            #     ).getContent()
+            # except OpenSSL.SSL.Error:
+            #     raise AttributeError("The provided keys directory could not be found or does not contain the necessary keys. \
+            #         Make sure that you are providing a correct path, that your private key is named 'private.key' and that your public key is named 'selfsigned.crt'. \
+            #             You can use the script generate_certificates.py to generate the keys.")
+            # authority = ssl.Certificate.loadPEM(certData)            
             reactor.connectSSL(
                 host=self._ip_server,
                 port=self._port_server,
