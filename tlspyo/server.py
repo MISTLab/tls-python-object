@@ -1,12 +1,19 @@
 import logging
-import math
 import pickle as pkl
+from ssl import SSLError
 import time
 from collections import deque
 
 from twisted.internet.protocol import Protocol, Factory
+from twisted.internet import ssl
+
+import OpenSSL
 
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
+import os
+
+
+DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'default_keys')
 
 
 class ServerProtocol(Protocol):
@@ -104,12 +111,12 @@ class ServerProtocol(Protocol):
         msg = pkl.dumps((self._server.ack_stamp, cmd, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self._server.pending_acks[self._server.ack_stamp] = (time.monotonic(), msg)
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def retrieve_broadcast(self):
         if self._identifier is not None:
@@ -198,7 +205,14 @@ class ServerProtocolFactory(Factory):
 
 
 class Server:
-    def __init__(self, port, password, accepted_groups=None, header_size=10, local_com_port=2097):
+    def __init__(self,
+                 port,
+                 password,
+                 accepted_groups=None,
+                 header_size=10,
+                 local_com_port=2097,
+                 connection="TLS",
+                 keys_dir=None):
         self._port = port
         self._local_com_port = local_com_port
         assert self._local_com_port != self._port, f"Internet and local ports are the same ({self._port})."
@@ -212,6 +226,8 @@ class Server:
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
         self._reactor = None
         self._listener = None
+        self._connection = connection
+        self._keys_dir = keys_dir
 
     def run(self):
         """
@@ -227,7 +243,23 @@ class Server:
 
         # Start relay server
         factory = ServerProtocolFactory(self)
-        reactor.listenTCP(self._port, factory)
+        if self._connection == "TCP":
+            reactor.listenTCP(self._port, factory)
+        elif self._connection == "TLS":
+            # Use default keys if none are provided
+            private_key = os.path.join(self._keys_dir, 'private.key') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'private.key')
+            self_signed = os.path.join(self._keys_dir, 'selfsigned.crt') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'selfsigned.crt')
+            # Authenticates the server to all potential clients for TLS communication
+            try:
+                context = ssl.DefaultOpenSSLContextFactory(private_key, self_signed)
+            except OpenSSL.SSL.Error:
+                raise AttributeError("The provided keys directory could not be found or does not contain the necessary keys. \
+                    Make sure that you are providing a correct path, that your private key is named 'private.key' and that your public key is named 'selfsigned.crt'. \
+                        You can use the script generate_certificates.py to generate the keys.")
+            reactor.listenSSL(self._port, factory, context)
+        else:
+            logging.warning(f"Unsupported connection: {self._connection}")
+            return
 
         self._reactor = reactor
         self._reactor.run()  # main Twisted reactor loop

@@ -85,7 +85,6 @@ class TestGroups(unittest.TestCase):
         self.assertEqual(r[0], 'test6', f"r:{r}")
 
         # test producing
-
         ep1.produce(obj='test7', group='group3')
         ep3.notify(groups='group3')
         r = ep3.pop(blocking=True)

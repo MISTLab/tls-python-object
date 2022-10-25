@@ -2,7 +2,7 @@ import logging
 import pickle as pkl
 import time
 
-from twisted.internet import task, defer
+from twisted.internet import ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
@@ -61,7 +61,7 @@ class ClientProtocol(Protocol):
                             logging.debug(f"Received object, transferring to local EndPoint.")
                             # transfer the object to the EndPoint server
                             if self._client.endpoint is not None:
-                                self._client.endpoint.transport.write(data=self._buffer[:j])
+                                self._client.endpoint.transport.write(self._buffer[:j])
                             else:
                                 logging.warning(f"Local EndPoint is not connected, discarding object.")
                 # truncate the processed part of the buffer:
@@ -73,12 +73,12 @@ class ClientProtocol(Protocol):
         msg = pkl.dumps((self._client.ack_stamp, cmd, dest, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def send_ack(self, stamp):
         msg = pkl.dumps((stamp, 'ACK', None, None))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
-        self.transport.write(data=msg)
+        self.transport.write(msg)
 
     def get_state(self):
         return self._state
@@ -111,7 +111,14 @@ class TLSClientFactory(ReconnectingClientFactory):
 
 
 class Client:
-    def __init__(self, ip_server, port_server, password, header_size=10, groups=None, local_com_port=2097):
+    def __init__(self,
+                 ip_server,
+                 port_server,
+                 password,
+                 header_size=10,
+                 groups=None,
+                 local_com_port=2097,
+                 connection="TLS"):
         self.groups = groups
         self._ip_server = ip_server
         self._port_server = port_server
@@ -124,6 +131,7 @@ class Client:
         self.store = []
         self.ack_stamp = 0
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
+        self._connection = connection
 
     def run(self):
         """
@@ -134,9 +142,21 @@ class Client:
         # from twisted.internet.interfaces import IReadDescriptor
         from twisted.internet import reactor
 
-        # Initialize the connections 
+        # Initialize the local connection
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForClientFactory(self))
-        reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
+
+        # Initialize the Internet connection
+        if self._connection == "TCP":
+            reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
+        elif self._connection == "TLS":
+            reactor.connectSSL(
+                host=self._ip_server,
+                port=self._port_server,
+                factory=TLSClientFactory(client=self),
+                contextFactory=ssl.ClientContextFactory()
+            )
+        else:
+            logging.warning(f"Unsupported connection: {self._connection}")
         
         # Start the reactor
         self._reactor = reactor
