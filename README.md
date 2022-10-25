@@ -1,7 +1,7 @@
 # tlspyo
 **A library for secure transfer of python objects over the network**
 
-This library provides an easy-to-use API to transfer python objects over the network in a safe, efficient way. It provides a flexible interface to manage communication between multiple nodes with different roles over a network. It was designed to allow for efficient development of learning infrastructure in Python but is modular enough to be used for any projet where communication between multiple computers is required. **Tlspyo** is used in several projects at the MIST Lab for hyperparameter-tuning and deep reinforcement learning using multiple learning agents.
+This library provides an easy-to-use API to transfer python objects over the network in a safe, efficient way. It provides a flexible interface to manage communication between multiple nodes with different roles over a network. It was designed to allow for efficient development of learning infrastructure in Python but is modular enough to be used for any projet where communication between multiple computers is required. **Tlspyo** is used in several projects at the MIST Lab for [hyperparameter-tuning](https://github.com/Portiloop) and [deep reinforcement learning](https://github.com/trackmania-rl/tmrl) using multiple learning agents.
 
 ## Getting Started
 Transferring objects using this library is done using two types of objects: 
@@ -14,12 +14,12 @@ After installing **tlspyo** using `pip install tlspyo`, you can get started with
 In this set up, one of the nodes in your network will be used to produce objets while the other will be used to consume objects by printing them.
 
 The following code creates the objects which you can use to transfer objects between node in your network. Here, everything is run locally but different ports are used to simulate talking to another computer on the network.
-```
+```python
 # Initialize a relay to allow connectivity between endpoints
 re = Relay(
     port=3000,
     password="VerySecurePassword",
-    accepted_groups="group_1, group_2",
+    accepted_groups=None,
     local_com_port=3001,
     header_size=12 # Depends on the size of the objects you are sending
 )
@@ -50,13 +50,13 @@ cons = Endpoint(
 
  There are two ways for endpoints to send objects:
  * **Broadcasting** is used to send an an object to every endpoint in a given group.
-    ```
+    ```python
     # Producer broadcasts an object to any and all consumer in the destination group "group_2"
     prod.broadcast("I AM BROADCASTED OBJECT", "group_2")
     ```
  * **Producing** is used to send an object to a queue that is shared between all endpoints of a given group. The endpoints of the receiving group can then **Notify** the relay to get access to a certain number of objects that have been put in that shared queue. This queue behaves as FIFO and objects can only be consumed by one of the receiving endpoint when they have been produced.
 
-    ```
+    ```python
     # Producer sends an object to the shared queue of destination group "group_2"
     prod.produce("I AM A PRODUCED OBJECT", "group_2")
     # Consumer notifies the Relay that it wants one object destined for "group_2"
@@ -73,47 +73,59 @@ Once objects reach the consumer endpoint, they are stored in a local queue from 
 * If `blocking` is true, all methods above will block until one item is received.
 * Use `max_items` to specify a maximum number of items to be returned.
 
-**Full Example using the produce/notify API:**
+When you are done with your communication needs, do not forget to stop all endpoints and relays to make sure your program dies peacefully. Note that once the relay is stopped, all communication between endpoints will fail so make sure that your relay is up whenever you are trying to communicate.
+```python
+prod.stop()
+cons.stop()
+re.stop()
 ```
+
+**Full Example using the produce/notify API:**
+```python
 from tlspyo import Relay, Endpoint
 
-# Initialize a Relay to allow connectivity between Endpoints
-re = Relay(
-    port=3000,
-    password="VerySecurePassword",
-    accepted_groups="group_1, group_2",
-    local_com_port=3001,
-    header_size=12 # Depends on the size of the objects you are sending
-)
+# Spawning processes in python must be protected by this if statement to avoid recursively spawning child processes.
+if __name__ == "__main__": 
+    # Initialize a Relay to allow connectivity between Endpoints
+    re = Relay(
+        port=3000,
+        password="VerySecurePassword",
+        accepted_groups=None,
+        local_com_port=3001,
+        header_size=12 # Depends on the size of the objects you are sending
+    )
 
-# Initialize the Producer endpoint
-prod = Endpoint(
-    ip_server='127.0.0.1', # Using localhost 
-    port=3000, # Must be same port as relay to ensure communication
-    password="VerySecurePassword",
-    groups="group_1",
-    local_com_port=3002, # Must be a different port to simulate communication on different machines
-    header_size=12
-)
+    # Initialize the Producer endpoint
+    prod = Endpoint(
+        ip_server='127.0.0.1', # Using localhost 
+        port=3000, # Must be same port as relay to ensure communication
+        password="VerySecurePassword",
+        groups="group_1",
+        local_com_port=3002, # Must be a different port to simulate communication on different machines
+        header_size=12
+    )
 
-# Initialize the Consumer endpoint
-cons = Endpoint(
-    ip_server='127.0.0.1', # Using localhost 
-    port=3000, # Must be same port as relay to ensure communication
-    password="VerySecurePassword",
-    groups="group_2",
-    local_com_port=3003, # Must be a different port to simulate communication on different machines
-    header_size=12
-) 
+    # Initialize the Consumer endpoint
+    cons = Endpoint(
+        ip_server='127.0.0.1', # Using localhost 
+        port=3000, # Must be same port as relay to ensure communication
+        password="VerySecurePassword",
+        groups="group_2",
+        local_com_port=3003, # Must be a different port to simulate communication on different machines
+        header_size=12
+    ) 
 
-# Producer sends an object to the shared queue of destination group "group_2"
-prod.produce("I AM A PRODUCED OBJECT", "group_2")
-# Consumer notifies the Relay that it wants one object destined for "group_2"
-cons.notify({"group_2":1})
+    # Producer sends an object to the shared queue of destination group "group_2"
+    prod.produce("I AM A PRODUCED OBJECT", "group_2")
+    # Consumer notifies the Relay that it wants one object destined for "group_2"
+    cons.notify({"group_2":1})
 
-# Consumer retrieves this object in a blocking call
-res = cons.pop(blocking=True)
-print(res)
+    # Consumer retrieves this object in a blocking call
+    res = cons.pop(blocking=True) 
+    print(res[0]) # Print the first (and only) result from the local queue
+    prod.stop()
+    cons.stop()
+    re.stop()
 ```
 
 There you go! You have now sent your first object over the network using **tlspyo**. You can check out the documentation for more details about the API.
@@ -121,15 +133,15 @@ There you go! You have now sent your first object over the network using **tlspy
 ## Security
 This library was designed as a safe option to easily transfer any python object over the network using serialization. There are two layers of security:
 * This library uses TLS which means that all communication between the endpoints and the relay is encrypted.
-* Every object transfer is protected using a password known to both the Relay and the endpoint. No object is deserialized without verification of the password. This ensures that anyone posing as an endpoint will never be able to send undesired objects through your Relay.
+* Every object transfer is protected using a password known to both the relay and the endpoint. No object is deserialized without verification of the password. This ensures that anyone posing as an endpoint will never be able to send undesired objects through your relay unless they know the password.
 
 This library ships with some default keys and certificates to ensure communication is possible out of the box. However, we recommend you generate your own keys. A script is provided to help you do so:
-```
+```python
 from tlspyo.generate_certificates import gen_cert
 gen_cert() 
 ```
  This will generate two files: private.key and selfsigned.crt in a new folder called keys. Make sure to specify this directory next when starting the Relay:
-```
+```python
 re = Relay(
     port=3000,
     password="VerySecurePassword",
@@ -139,6 +151,9 @@ re = Relay(
     keys_dir="PATH_TO_MY_KEYS"
 )
  ```
+
+**:warning:IMPORTANT NOTE:warning:**
+This library uses pickle to serialize objects before sending them over the network. Someone who knows your password and has access to your relay public IP address could send some malevolent pickled object which could execute arbitrary code on your machine. Please make sure to keep your password safe
 
 ## Contributing
 
