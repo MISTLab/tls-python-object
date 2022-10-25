@@ -3,11 +3,15 @@ from socket import AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, socket
 import pickle as pkl
 from threading import Thread, Lock
 from multiprocessing import Process
+import os
 
 from tlspyo.server import Server
 from tlspyo.client import Client
 
 from tlspyo.utils import get_from_queue
+
+
+DEFAULT_CONNECTION = "TLS"
 
 
 class Relay:
@@ -16,7 +20,9 @@ class Relay:
                  password: str,
                  accepted_groups=None,
                  local_com_port: int = 2097,
-                 header_size: int = 10):
+                 header_size: int = 10,
+                 connection: str = DEFAULT_CONNECTION,
+                 keys_dir: str = None):
         """
         `tlspyo` Relay.
 
@@ -35,7 +41,12 @@ class Relay:
                 - 'max_consumables': max number of pending consumables in the group (None for unlimited).
         :param local_com_port: int: local port used for internal communication with Twisted.
         :param header_size: int: bytes to read at once from socket buffers (the default should work for most cases).
+        :param connection: str: one of ("TCP", "TLS")
         """
+
+        if connection == "SSL":
+            connection = "TLS"
+        assert connection in ("TCP", "TLS"), f"Unsupported connection: {connection}"
 
         assert accepted_groups is None or isinstance(accepted_groups, dict), "Invalid format for accepted_groups."
 
@@ -45,11 +56,14 @@ class Relay:
         self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self._local_com_srv.bind(('127.0.0.1', self._local_com_port))
         self._local_com_srv.listen()
+        keys_dir = os.path.abspath(keys_dir) if keys_dir is not None else keys_dir
         self._server = Server(port=port,
                               password=password,
                               accepted_groups=accepted_groups,
                               local_com_port=local_com_port,
-                              header_size=header_size)
+                              header_size=header_size,
+                              connection=connection,
+                              keys_dir=keys_dir)
         self._p = Process(target=self._server.run, args=())
         self._p.start()
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
@@ -81,10 +95,10 @@ class Endpoint:
                  port: int,
                  password: str,
                  groups=None,
-                 local_com_port:
-                 int = 2097,
+                 local_com_port: int = 2097,
                  header_size: int = 10,
-                 max_buf_len: int = 4096):
+                 max_buf_len: int = 4096,
+                 connection: str = DEFAULT_CONNECTION):
         """
         tlspyo Endpoint.
 
@@ -101,7 +115,12 @@ class Endpoint:
         :param local_com_port: local port used for internal communication with Twisted
         :param header_size: int: number of bytes used for the header (the default should be OK for most cases)
         :param max_buf_len: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
+        :param connection: str: one of ("TCP", "TLS")
         """
+
+        if connection == "SSL":
+            connection = "TLS"
+        assert connection in ("TCP", "TLS"), f"Unsupported connection: {connection}"
 
         # threading for local object receiving
         self.__obj_buffer = queue.Queue()
@@ -121,7 +140,8 @@ class Endpoint:
                               password=password,
                               groups=groups,
                               local_com_port=local_com_port,
-                              header_size=header_size)
+                              header_size=header_size,
+                              connection=connection)
 
         # start local server and Twisted process
         self._local_com_srv.bind(('127.0.0.1', self._local_com_port))

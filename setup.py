@@ -17,7 +17,11 @@ setup(name='tlspyo',
       download_url='',
       keywords=['python', 'tls', 'ssl', 'pickle', 'transfer', 'object', 'transport', 'twisted'],
       install_requires=[
-        'twisted'
+        'twisted',
+        'pyOpenSSL',
+        'pytest',
+        'pytest-timeout',
+        'service_identity'
         ],
       classifiers=[
           'DDevelopment Status :: 4 - Beta',
