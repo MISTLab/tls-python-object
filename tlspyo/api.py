@@ -98,7 +98,9 @@ class Endpoint:
                  local_com_port: int = 2097,
                  header_size: int = 10,
                  max_buf_len: int = 4096,
-                 connection: str = DEFAULT_CONNECTION):
+                 connection: str = DEFAULT_CONNECTION,
+                 keys_dir: str = None,
+                 hostname: str = "default"):
         """
         tlspyo Endpoint.
 
@@ -135,13 +137,17 @@ class Endpoint:
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
         self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        keys_dir = os.path.abspath(keys_dir) if keys_dir is not None else keys_dir
+
         self._client = Client(ip_server=ip_server,
                               port_server=port,
                               password=password,
                               groups=groups,
                               local_com_port=local_com_port,
                               header_size=header_size,
-                              connection=connection)
+                              connection=connection,
+                              keys_dir=keys_dir,
+                              hostname=hostname)
 
         # start local server and Twisted process
         self._local_com_srv.bind(('127.0.0.1', self._local_com_port))

@@ -1,11 +1,15 @@
 import logging
 import pickle as pkl
 import time
+import OpenSSL
+import os
+from twisted.python.filepath import FilePath
 
 from twisted.internet import ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
+DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'default_keys')
 
 class ClientProtocol(Protocol):
     def __init__(self, client, password, header_size=10, groups=("default", )):
@@ -118,7 +122,9 @@ class Client:
                  header_size=10,
                  groups=None,
                  local_com_port=2097,
-                 connection="TLS"):
+                 connection="TLS",
+                 keys_dir=None,
+                 hostname='default'):
         self.groups = groups
         self._ip_server = ip_server
         self._port_server = port_server
@@ -132,6 +138,8 @@ class Client:
         self.ack_stamp = 0
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
         self._connection = connection
+        self._keys_dir = keys_dir
+        self._hostname = hostname
 
     def run(self):
         """
@@ -149,11 +157,21 @@ class Client:
         if self._connection == "TCP":
             reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
         elif self._connection == "TLS":
+            # Use default keys if none are provided
+            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'certificate.pem')
+            # Authenticates the server to all potential clients for TLS communication
+            try:
+                certData = FilePath(self_signed).getContent()
+            except OpenSSL.SSL.Error:
+                raise AttributeError("The provided keys directory could not be found or does not contain the necessary keys. \
+                    Make sure that you are providing a correct path, that your private key is named 'private.key' and that your public key is named 'selfsigned.crt'. \
+                        You can use the script generate_certificates.py to generate the keys.")
+            authority = ssl.Certificate.loadPEM(certData)            
             reactor.connectSSL(
                 host=self._ip_server,
                 port=self._port_server,
                 factory=TLSClientFactory(client=self),
-                contextFactory=ssl.ClientContextFactory()
+                contextFactory=ssl.optionsForClientTLS(hostname=self._hostname, trustRoot=authority)
             )
         else:
             logging.warning(f"Unsupported connection: {self._connection}")

@@ -12,6 +12,8 @@ import OpenSSL
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
 import os
 
+from twisted.python.filepath import FilePath
+
 
 DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'default_keys')
 
@@ -247,8 +249,8 @@ class Server:
             reactor.listenTCP(self._port, factory)
         elif self._connection == "TLS":
             # Use default keys if none are provided
-            private_key = os.path.join(self._keys_dir, 'private.key') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'private.key')
-            self_signed = os.path.join(self._keys_dir, 'selfsigned.crt') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'selfsigned.crt')
+            private_key = os.path.join(self._keys_dir, 'key.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'key.pem')
+            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'certificate.pem')
             # Authenticates the server to all potential clients for TLS communication
             try:
                 context = ssl.DefaultOpenSSLContextFactory(private_key, self_signed)
