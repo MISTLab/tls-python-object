@@ -15,7 +15,7 @@ import os
 from twisted.python.filepath import FilePath
 
 
-DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'keys')
+DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'default_keys')
 
 
 class ServerProtocol(Protocol):
@@ -249,23 +249,16 @@ class Server:
             reactor.listenTCP(self._port, factory)
         elif self._connection == "TLS":
             # Use default keys if none are provided
-            private_key = os.path.join(self._keys_dir, 'private.key') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'server.pem')
-            # self_signed = os.path.join(self._keys_dir, 'selfsigned.crt') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'selfsigned.crt')
+            private_key = os.path.join(self._keys_dir, 'key.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'key.pem')
+            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'certificate.pem')
             # Authenticates the server to all potential clients for TLS communication
             try:
-                # with open(private_key, "r") as my_key_file:
-                #     certData = my_key_file.read()
-                #     # certData = OpenSSL.crypto.load_certificate(
-                #     #     OpenSSL.crypto.FILETYPE_PEM, 
-                #     #     certData
-                #     # )
-                certData = FilePath(private_key).getContent()
+                context = ssl.DefaultOpenSSLContextFactory(private_key, self_signed)
             except OpenSSL.SSL.Error:
                 raise AttributeError("The provided keys directory could not be found or does not contain the necessary keys. \
                     Make sure that you are providing a correct path, that your private key is named 'private.key' and that your public key is named 'selfsigned.crt'. \
                         You can use the script generate_certificates.py to generate the keys.")
-            certificate = ssl.PrivateCertificate.loadPEM(certData)
-            reactor.listenSSL(self._port, factory, certificate.options())
+            reactor.listenSSL(self._port, factory, context)
         else:
             logging.warning(f"Unsupported connection: {self._connection}")
             return

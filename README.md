@@ -135,25 +135,34 @@ This library was designed as a safe option to easily transfer any python object 
 * This library uses TLS which means that all communication between the endpoints and the relay is encrypted.
 * Every object transfer is protected using a password known to both the relay and the endpoint. No object is deserialized without verification of the password. This ensures that anyone posing as an endpoint will never be able to send undesired objects through your relay unless they know the password.
 
-This library ships with some default keys and certificates to ensure communication is possible out of the box. However, we recommend you generate your own keys. A script is provided to help you do so:
-```python
-from tlspyo.generate_certificates import gen_cert
-gen_cert() 
+This library ships with some default keys and certificates to ensure communication is possible out of the box. However, we recommend you generate your own keys. To do so, use the following command:
+```bash
+openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certificate.pem
 ```
- This will generate two files: private.key and selfsigned.crt in a new folder called keys. Make sure to specify this directory next when starting the Relay:
+You will be asked some questions and a certificate and a private key will be generated. Make sure to take careful note of the **common name/hostname** that you choose as you must specify it when you want to initialize an endpoint. These two need to be stored in the same directory which must be specified when initializing the relay and all endpoints. Make sure that these certificates match or authentication of your endpoints to your relay will fail. 
 ```python
 re = Relay(
     port=3000,
     password="VerySecurePassword",
-    accepted_groups="group_1, group_2",
+    accepted_groups=None,
     local_com_port=3001,
     header_size=12,
-    keys_dir="PATH_TO_MY_KEYS"
+    keys_dir="PATH_TO_MY_KEYS" # Change this
+)
+
+re = Relay(
+    port=3000,
+    password="VerySecurePassword",
+    accepted_groups=None,
+    local_com_port=3001,
+    header_size=12,
+    keys_dir="PATH_TO_YOUR_KEYS", # Change this
+    hostname="YOUR_HOSTNAME" # Change this
 )
  ```
 
 **:warning:IMPORTANT NOTE:warning:**
-This library uses pickle to serialize objects before sending them over the network. Someone who knows your password and has access to your relay public IP address could send some malevolent pickled object which could execute arbitrary code on your machine. Please make sure to keep your password safe
+This library uses pickle to serialize objects before sending them over the network. Someone who knows your password and has access to your relay public IP address could send some malevolent pickled object which could execute arbitrary code on your machine. **Please make sure to keep your password and your key/certificate pair safe!**
 
 ## Contributing
 
