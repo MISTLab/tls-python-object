@@ -9,7 +9,7 @@ from twisted.internet import ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
-DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'default_keys')
+DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.join('tlspyo', 'default_keys'))
 
 class ClientProtocol(Protocol):
     def __init__(self, client, password, header_size=10, groups=("default", )):

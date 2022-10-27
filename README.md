@@ -1,6 +1,8 @@
 # tlspyo
 **A library for secure transfer of python objects over the network**
 
+[![Python package](https://github.com/MISTLab/tls-python-object/blob/main/.github/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/MISTLab/tls-python-object/blob/main/.github/workflows/python-package.yml)
+
 This library provides an easy-to-use API to transfer python objects over the network in a safe, efficient way. It provides a flexible interface to manage communication between multiple nodes with different roles over a network. It was designed to allow for efficient development of learning infrastructure in Python but is modular enough to be used for any projet where communication between multiple computers is required. **Tlspyo** is used in several projects at the MIST Lab for [hyperparameter-tuning](https://github.com/Portiloop) and [deep reinforcement learning](https://github.com/trackmania-rl/tmrl) using multiple learning agents.
 
 ## Getting Started

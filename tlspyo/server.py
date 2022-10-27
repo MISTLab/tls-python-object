@@ -15,7 +15,7 @@ import os
 from twisted.python.filepath import FilePath
 
 
-DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'default_keys')
+DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.join('tlspyo', 'default_keys'))
 
 
 class ServerProtocol(Protocol):

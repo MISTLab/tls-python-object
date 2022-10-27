@@ -7,9 +7,11 @@ with open("README.md", "r") as fh:
 
 setup(name='tlspyo',
       packages=[package for package in find_packages()],
-      version='0.1',
+      include_package_data=True,
+      package_data={"tlspyo": ["*.pem"]},
+      version='0.1.0',
       license='MIT',
-      description='Secure transport of pickled objects',
+      description='Secure transport of python objects using TLS encryption',
       long_description=long_description,
       long_description_content_type="text/markdown",
       author='Yann Bouteiller, Milo Sobral',
@@ -19,12 +21,13 @@ setup(name='tlspyo',
       install_requires=[
         'twisted',
         'pyOpenSSL',
-        'pytest',
-        'pytest-timeout',
         'service_identity'
         ],
+      extras_requires={
+        "dev": ['pytest','pytest-timeout']
+      },
       classifiers=[
-          'DDevelopment Status :: 4 - Beta',
+          'Development Status :: 4 - Beta',
           'Intended Audience :: Developers',
           'Intended Audience :: Education',
           'Intended Audience :: Information Technology',
