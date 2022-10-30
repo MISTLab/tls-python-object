@@ -5,9 +5,9 @@
 
 `tlspyo` provides a simple API to transfer python objects in a robust and safe way via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), between several machines (and/or processes) called `Endpoints`.
 
-- `Endpoints` are part of one to several `groups`,
+- `Endpoints` are part of one to several groups,
 - Arbitrarily many `Endpoints` connect together via a central `Relay`,
-- Each `Endpoint` can `broadcast` or `produce` python objects to the desired `groups`.
+- Each `Endpoint` can *broadcast* or *produce* python objects to the desired groups.
 
 :warning: By default, `tlspyo` serializes python objects via `pickle`.
 Internet safety is achieved via TLS and requires a minimal but **MANDATORY** amount of effort from the user, without which using `tlspyo` (or any similar approach) on a publicly exposed network [**would be a serious security breach**](https://www.synopsys.com/blogs/software-security/python-pickling/).
@@ -30,10 +30,10 @@ from tlspyo import Relay, Endpoint
 * An `Endpoint` is a node in your network. It connects to the `Relay` and is part of one to several `groups`.
 
 `Endpoints` can do a multitude of things, including:
-- `broadcast` objects to whole `groups` of `Endpoints`,
-- `retrieve` the objects broadcast to the `group(s)` it is part of,
-- `produce` a single object that will be consumed by a single `Endpoint` of a target `group`,
-- `notify` the `Relay` that it is ready to consume a produced object and wait until it receives it.
+- *broadcast* objects to whole groups of `Endpoints`,
+- *retrieve* the objects broadcast to the group(s) it is part of,
+- *produce* a single object that will be consumed by a single `Endpoint` of a target group,
+- *notify* the `Relay` that it is ready to consume a produced object and wait until it receives it.
 
 
 ### A Simple Producer-Consumer Example
@@ -209,7 +209,7 @@ openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certifi
 You will be asked some questions and a certificate and a private key will be generated.
 Make sure to take careful note of the **common name/hostname** that you choose as you must specify it when you want to initialize an endpoint.
 These two need to be stored in the same directory which must be specified when initializing the relay and all endpoints.
-Make sure that these certificates match or authentication of your endpoints to your relay will fail. 
+Make sure that these certificates match or authentication of your relay to your endpoints will fail. 
 ```python
 re = Relay(
     port=3000,
