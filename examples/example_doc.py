@@ -1,43 +1,65 @@
+import time
 from tlspyo import Relay, Endpoint
 
 if __name__ == "__main__":
-    # Initialize a Relay to allow connectivity between Endpoints
+
+    # Initialize a relay to allow connectivity between endpoints
+
     re = Relay(
+        port=3000,  # this must be the same on your Relay and Endpoints
+        password="VerySecurePassword",  # this must be the same on Relay and Endpoints, AND be strong
+        local_com_port=3001  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
+    )
+
+    # Initialize a producer endpoint
+
+    prod = Endpoint(
+        ip_server='127.0.0.1',  # IP of the Relay (here: localhost)
+        port=3000,  # must be same port as the Relay
+        password="VerySecurePassword",  # must be same (strong) password as the Relay
+        groups="producers",  # this endpoint is part of the group "producers"
+        local_com_port=3002  # must be unique
+    )
+
+    # Initialize  consumer endpoints
+
+    cons_1 = Endpoint(
+        ip_server='127.0.0.1',
         port=3000,
         password="VerySecurePassword",
-        accepted_groups=None,
-        local_com_port=3001,
-        header_size=12 # Depends on the size of the objects you are sending
+        groups="consumers",  # this endpoint is part of group "consumers"
+        local_com_port=3003  # must be unique
     )
 
-    # Initialize the Producer endpoint
-    prod = Endpoint(
-        ip_server='127.0.0.1', # Using localhost 
-        port=3000, # Must be same port as relay to ensure communication
+    cons_2 = Endpoint(
+        ip_server='127.0.0.1',
+        port=3000,
         password="VerySecurePassword",
-        groups="group_1",
-        local_com_port=3002, # Must be a different port to simulate communication on different machines
-        header_size=12
+        groups="consumers",  # this endpoint is part of group "consumers"
+        local_com_port=3004,  # must be unique
     )
 
-    # Initialize the Consumer endpoint
-    cons = Endpoint(
-        ip_server='127.0.0.1', # Using localhost 
-        port=3000, # Must be same port as relay to ensure communication
-        password="VerySecurePassword",
-        groups="group_2",
-        local_com_port=3003, # Must be a different port to simulate communication on different machines
-        header_size=12
-    ) 
+    # Producer broadcasts an object to any and all endpoint in the destination group "consumers"
+    prod.broadcast("I HAVE BEEN BROADCAST", "consumers")
 
-    # Producer sends an object to the shared queue of destination group "group_2"
-    prod.produce("I AM A PRODUCED OBJECT", "group_2")
-    # Consumer notifies the Relay that it wants one object destined for "group_2"
-    cons.notify({"group_2":1})
+    # Producer sends an object to the shared queue of destination group "consumers"
+    prod.produce("I HAVE BEEN PRODUCED", "consumers")
 
-    # Consumer retrieves this object in a blocking call
-    res = cons.pop(blocking=True) 
-    print(res[0]) # Print the first (and only) result from the local queue
+    # Consumer 1 notifies the Relay that it wants one produced object destined for "consumers"
+    cons_1.notify("consumers")
+
+    # Consumer 1 is able to retrieve the broadcast AND the consumed object:
+    res = []
+    while len(res) < 2:
+        res = cons_1.receive_all(blocking=True)
+    print(f"Consumer 1 has received: {res}") # Print the first (and only) result from the local queue
+
+    # Consumer 2 is able to retrieve only the broadcast object:
+    res = cons_2.receive_all(blocking=True)
+    print(f"Consumer 2 has received: {res}")  # Print the first (and only) result from the local queue
+
+    # Let us close everyone gracefully:
     prod.stop()
-    cons.stop()
+    cons_1.stop()
+    cons_2.stop()
     re.stop()

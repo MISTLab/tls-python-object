@@ -19,7 +19,7 @@ class Relay:
                  port: int,
                  password: str,
                  accepted_groups=None,
-                 local_com_port: int = 2097,
+                 local_com_port: int = 2096,
                  header_size: int = 10,
                  connection: str = DEFAULT_CONNECTION,
                  keys_dir: str = None):

@@ -1,170 +1,244 @@
 # tlspyo
-**A library for secure transfer of python objects over the network**
+**A library for secure transfer of python objects over network**
 
 [![Python package](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml/badge.svg)](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml)
 
-This library provides an easy-to-use API to transfer python objects over the network in a safe, efficient way. It provides a flexible interface to manage communication between multiple nodes with different roles over a network. It was designed to allow for efficient development of learning infrastructure in Python but is modular enough to be used for any projet where communication between multiple computers is required. **Tlspyo** is used in several projects at the MIST Lab for [hyperparameter-tuning](https://github.com/Portiloop) and [deep reinforcement learning](https://github.com/trackmania-rl/tmrl) using multiple learning agents.
+`tlspyo` provides a simple API to transfer python objects in a robust and safe way via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), between several machines (and/or processes) called `Endpoints`.
+
+- `Endpoints` are part of one to several `groups`,
+- Arbitrarily many `Endpoints` connect together via a central `Relay`,
+- Each `Endpoint` can `broadcast` or `produce` python objects to the desired `groups`.
+
+:warning: By default, `tlspyo` serializes python objects via `pickle`.
+Internet safety is achieved via TLS and requires a minimal but **MANDATORY** amount of effort from the user, without which using `tlspyo` (or any similar approach) on a publicly exposed network [**would be a serious security breach**](https://www.synopsys.com/blogs/software-security/python-pickling/).
+Please carefully read the [Security](#security) section before using `tlspyo` anywhere other than your own secure private network.
+
+
+## Installation
+```bash
+pip install tlspyo
+```
+
 
 ## Getting Started
-Transferring objects using this library is done using two types of objects: 
-* A **relay** is the center point of all communication and is used to manage the transfer of objects to different groups of endpoints in different ways. The relay must always be up at any time for communication to be succesful between endpoints.
-* An **endpoint** represents one of the nodes in your network. It can behave in a multitude of ways including broadcasting objects to whole groups or producing objects that can be consumed by other endpoints. An endpoint can be set up to serve as a producer, a consumer, a compute node...
+`tlspyo` uses two classes: `Relay` and  `Endpoint`.
+```python
+from tlspyo import Relay, Endpoint
+```
 
-After installing **tlspyo** using `pip install tlspyo`, you can get started with the following simple example that explains some of the behavior of this library.
+* The `Relay` is the center point of all communication between `Endpoints`,
+* An `Endpoint` is a node in your network. It connects to the `Relay` and is part of one to several `groups`.
 
-### A Simple Producer-Consumer Example 
-In this set up, one of the nodes in your network will be used to produce objets while the other will be used to consume objects by printing them.
+`Endpoints` can do a multitude of things, including:
+- `broadcast` objects to whole `groups` of `Endpoints`,
+- `retrieve` the objects broadcast to the `group(s)` it is part of,
+- `produce` a single object that will be consumed by a single `Endpoint` of a target `group`,
+- `notify` the `Relay` that it is ready to consume a produced object and wait until it receives it.
 
-The following code creates the objects which you can use to transfer objects between node in your network. Here, everything is run locally but different ports are used to simulate talking to another computer on the network.
+
+### A Simple Producer-Consumer Example
+
+The full script for this example can be found [here](https://github.com/MISTLab/tls-python-object/blob/main/examples/example_doc.py).
+
+#### Relay
+
+Every `tlspyo` application requires a central `Relay`.
+
+The `Relay` lives on a machine that can be reached by all `Endpoints`.
+Typically, you will want this machine to be accessible to your `Endpoints` via your private local network, or via the Internet through [port forwarding](https://en.wikipedia.org/wiki/Port_forwarding).
+**Note however that, before you make your `Relay` visible to the Internet via, e.g., port forwarding, it is important that you thoroughly understand the [Security](#security) section.**
+
+Creating a `Relay` is simple:
 ```python
 # Initialize a relay to allow connectivity between endpoints
+
 re = Relay(
+    port=3000,  # this must be the same on your Relay and Endpoints
+    password="VerySecurePassword",  # this must be the same on Relay and Endpoints, AND be strong
+    local_com_port=3001  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
+)
+```
+As soon as your `Relay` is created, it is up and running.
+Behind the scenes, it is now waiting for TLS connections from `Endpoints`.
+This is done in a background process that listens to `port` 3000 in this example.
+This process also communicates with your `Relay` via `local_com_port` 3001 in this example.
+
+Usually, you can ignore `local_com_port` unless you use several `Endpoints/Relay` on the same machine, which we will do for the sake of illustration.
+
+#### Endpoints
+Now that our `Relay` is ready, let us create a bunch of `Endpoints`.
+This is also pretty straightforward:
+```python
+# Initialize a producer endpoint
+
+prod = Endpoint(
+    ip_server='127.0.0.1', # IP of the Relay (here: localhost)
+    port=3000, # must be same port as the Relay
+    password="VerySecurePassword", # must be same (strong) password as the Relay
+    groups="producers",  # this endpoint is part of the group "producers"
+    local_com_port=3002  # must be unique
+)
+
+# Initialize  consumer endpoints
+
+cons_1 = Endpoint(
+    ip_server='127.0.0.1',
     port=3000,
     password="VerySecurePassword",
-    accepted_groups=None,
-    local_com_port=3001,
-    header_size=12 # Depends on the size of the objects you are sending
-)
+    groups="consumers",  # this endpoint is part of group "consumers"
+    local_com_port=3003  # must be unique
+) 
 
-# Initialize the producer endpoint
-prod = Endpoint(
-    ip_server='127.0.0.1', # Using localhost 
-    port=3000, # Must be same port as relay to ensure communication
+cons_2 = Endpoint(
+    ip_server='127.0.0.1',
+    port=3000,
     password="VerySecurePassword",
-    groups="group_1",
-    local_com_port=3002, # Must be a different port to simulate communication on different machines
-    header_size=12
-)
-
-# Initialize the consumer endpoint
-cons = Endpoint(
-    ip_server='127.0.0.1', # Using localhost 
-    port=3000, # Must be same port as relay to ensure communication
-    password="VerySecurePassword",
-    groups="group_2",
-    local_com_port=3003, # Must be a different port to simulate communication on different machines
-    header_size=12
+    groups="consumers",  # this endpoint is part of group "consumers"
+    local_com_port=3003,  # must be unique
 ) 
 ```
- A nice thing about this library is that all communication is handled behind the scenes. The above calls have all launched processes in the background which handle connection between endpoints through the relay so that you don't have to make any blocking calls except when you want to!
+ A nice thing about `tlspyo` is that all communication is handled behind the scenes.
+ The above calls have all launched processes in the background which handle connection and communication between `Endpoints` through the `Relay`, so that you don't have to make any blocking calls except when you want to!
 
- Let's now send some objects from the producer. As you may have noticed, we created two different groups here. We put the producer in "group_1" and the consumer in "group_2". Every endpoint can be created as being part of any number of groups. When communicating between endpoints, you can use those groups to make sure the right endpoints get the right objects.
+ Let us now send some objects from the producer to the consumers.
+ As you may have noticed, we created two different groups here.
+ We put the producer in a group that we have named "producers", and the consumers in another group that we have called "consumers".
+ Note that `Endpoint` can be created as being part of any number of groups (`groups` can take a sequence of strings).
+ When communicating between endpoints, you can use those groups to make sure the right endpoints receive the right objects.
 
- There are two ways for endpoints to send objects:
- * **Broadcasting** is used to send an an object to every endpoint in a given group.
+ There are two ways for `Endpoints` to send objects in `tlspyo`:
+ * **Broadcasting** is used to send an an object to all endpoint in a given group.
+Furthermore, when an `Endpoint` connects to the `Relay`, it receives the last object that was broadcast to each of his groups.
     ```python
-    # Producer broadcasts an object to any and all consumer in the destination group "group_2"
-    prod.broadcast("I AM BROADCASTED OBJECT", "group_2")
+    # Producer broadcasts an object to any and all endpoint in the destination group "consumers"
+    prod.broadcast("I HAVE BEEN BROADCAST", "consumers")
     ```
- * **Producing** is used to send an object to a queue that is shared between all endpoints of a given group. The endpoints of the receiving group can then **Notify** the relay to get access to a certain number of objects that have been put in that shared queue. This queue behaves as FIFO and objects can only be consumed by one of the receiving endpoint when they have been produced.
+ * **Producing** is used to send an object to a queue (FIFO) that is shared between all `Endpoints` of a given group.
+The endpoints of the receiving group must **Notify** the `Relay` to get access to an object that has been put in that shared queue.
 
     ```python
-    # Producer sends an object to the shared queue of destination group "group_2"
-    prod.produce("I AM A PRODUCED OBJECT", "group_2")
-    # Consumer notifies the Relay that it wants one object destined for "group_2"
-    cons.notify({"group_2":1})
+    # Producer sends an object to the shared queue of destination group "consumers"
+    prod.produce("I HAVE BEEN PRODUCED", "consumers")
+
+    # Consumer notifies the Relay that it wants one produced object destined for "consumers"
+    cons_1.notify("consumers")
     ```
 
 Once objects reach the consumer endpoint, they are stored in a local queue from which you can retrieve objects whenever you want. To do this, there are multiple options:
-* To retrieve from the local queue in a FIFO fashion, use `cons.pop(blocking=blocking, max_items=max_items)`.
-* To retrieve the most recent item in the local queue and discard the rest, use `cons.get_last(blocking=blocking, max_items=max_items)`.
-* To get all items that are currently in the local queue, use `cons.retrieve_all(blocking=blocking)`. 
+* To retrieve from the local queue in a FIFO fashion, use `pop(blocking=blocking, max_items=max_items)`.
+* To retrieve the most recent item(s) in the local queue and discard the rest, use `get_last(blocking=blocking, max_items=max_items)`.
+* To get all items that are currently in the local queue, use `retrieve_all(blocking=blocking)`. 
 
 **Notes:** 
 * All calls above return a list of objects. If no objects are returned, the result will be an empty list.
-* If `blocking` is true, all methods above will block until one item is received.
-* Use `max_items` to specify a maximum number of items to be returned.
+* If `blocking` is `True`, all methods above will block until at least one item is received (default to `False`).
+* Use `max_items` to specify a maximum number of items to be returned (defaults to 1).
 
-When you are done with your communication needs, do not forget to stop all endpoints and relays to make sure your program dies peacefully. Note that once the relay is stopped, all communication between endpoints will fail so make sure that your relay is up whenever you are trying to communicate.
+Now, let our consumers retrieve their loot:
 ```python
-prod.stop()
-cons.stop()
-re.stop()
+# Consumer 1 is able to retrieve the broadcast AND the consumed object:
+ res = []
+ while len(res) < 2:
+     res = cons_1.receive_all(blocking=True)
+ print(f"Consumer 1 has received: {res}") # Print the first (and only) result from the local queue
+
+ # Consumer 2 is able to retrieve only the broadcast object:
+ res = cons_2.receive_all(blocking=True)
+ print(f"Consumer 2 has received: {res}")  # Print the first (and only) result from the local queue
+```
+ which prints:
+```terminal
+Consumer 1 has received: ['I HAVE BEEN BROADCAST', 'I HAVE BEEN PRODUCED']
+Consumer 2 has received: ['I HAVE BEEN BROADCAST']
 ```
 
-**Full Example using the produce/notify API:**
+Once we are done, we can `stop` all `Endpoints`, and then the `Relay` for the sake of a graceful exit:
 ```python
-from tlspyo import Relay, Endpoint
-
-# Spawning processes in python must be protected by this if statement to avoid recursively spawning child processes.
-if __name__ == "__main__": 
-    # Initialize a Relay to allow connectivity between Endpoints
-    re = Relay(
-        port=3000,
-        password="VerySecurePassword",
-        accepted_groups=None,
-        local_com_port=3001,
-        header_size=12 # Depends on the size of the objects you are sending
-    )
-
-    # Initialize the Producer endpoint
-    prod = Endpoint(
-        ip_server='127.0.0.1', # Using localhost 
-        port=3000, # Must be same port as relay to ensure communication
-        password="VerySecurePassword",
-        groups="group_1",
-        local_com_port=3002, # Must be a different port to simulate communication on different machines
-        header_size=12
-    )
-
-    # Initialize the Consumer endpoint
-    cons = Endpoint(
-        ip_server='127.0.0.1', # Using localhost 
-        port=3000, # Must be same port as relay to ensure communication
-        password="VerySecurePassword",
-        groups="group_2",
-        local_com_port=3003, # Must be a different port to simulate communication on different machines
-        header_size=12
-    ) 
-
-    # Producer sends an object to the shared queue of destination group "group_2"
-    prod.produce("I AM A PRODUCED OBJECT", "group_2")
-    # Consumer notifies the Relay that it wants one object destined for "group_2"
-    cons.notify({"group_2":1})
-
-    # Consumer retrieves this object in a blocking call
-    res = cons.pop(blocking=True) 
-    print(res[0]) # Print the first (and only) result from the local queue
-    prod.stop()
-    cons.stop()
-    re.stop()
+# Let us close everyone gracefully:
+ prod.stop()
+ cons_1.stop()
+ cons_2.stop()
+ re.stop()
 ```
 
-There you go! You have now sent your first object over the network using **tlspyo**. You can check out the documentation for more details about the API.
+There you go! You have now sent your first object over the network using `tlspyo`.
+
+Please check out the [API documentation](https://github.com/MISTLab/tls-python-object/blob/main/tlspyo/api.py) for more advanced usage.
 
 ## Security
-This library was designed as a safe option to easily transfer any python object over the network using serialization. There are two layers of security:
-* This library uses TLS which means that all communication between the endpoints and the relay is encrypted.
-* Every object transfer is protected using a password known to both the relay and the endpoint. No object is deserialized without verification of the password. This ensures that anyone posing as an endpoint will never be able to send undesired objects through your relay unless they know the password.
 
-This library ships with some default keys and certificates to ensure communication is possible out of the box. However, we recommend you generate your own keys. To do so, use the following command:
+### DISCLAIMER
+We are doing our best to make `tlspyo` reasonably secure **when used correctly**, but we provide ABSOLUTELY NO GUARANTEE that it is in any sense.
+We are a small open-source community, and we greatly appreciate your contribution to tackle any potentially unreasonable security concerns or important missing information.
+Please submit a detailed issue if you are aware of any important exploit not covered in this section.
+
+### Implementation
+
+`tlspyo` largely relies on the [Twisted](https://twisted.org) framework regarding [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) implementation and network management.
+
+### Important to know
+
+Objects transfered by `tlspyo` are pickled by default, so that you can transfer most python objects easily.
+If you use `tlspyo` on a machine that is visible from a public network (such as the Internet), failing to follow the security instructions provided thereafter would make you vulnerable to [dangerous exploits](https://davidhamann.de/2020/04/05/exploiting-python-pickle/).
+
+This is because unpickling untrusted pickled objects (i.e., pickled objects created by a malicious user) can lead to arbitrary code execution on your machine.
+
+To prevent this from happening, `tlspyo` provides two interdependent layers of security that you must configure when using the library on a machine that is visible from the Internet:
+* `Endpoints` authenticate your `Relay` via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), which must use your own secret key and public certificate.
+When done correctly, this ensures your `Endpoints` are indeed talking to your `Relay` and not to some [man-in-the-middle](https://en.wikipedia.org/wiki/Man-in-the-middle_attack).
+This also prevents anyone else from [eavesdropping](https://en.wikipedia.org/wiki/Eavesdropping) thanks to TLS encryption.
+* Every object transfer is protected by a password known to both the `Relay` and the `Endpoints`.
+No object is deserialized without verification of the password.
+This ensures that anyone posing as an endpoint will never be able to send undesired objects through your relay unless they know the password.
+
+If a malicious user successfully posed as your `Relay`, your `Endpoint` would send them messages that they could decrypt, including your password (this is prevented by TLS when using your own secret key and public certificate).
+If they successfully posed as your `Endpoint` they could send malicious pickled objects to your `Relay` (this is prevented by them not knowing your password).
+Thus, it is required that you configure both layers of security.
+
+In a nutshell, you want your password to be as strong as possible, and your TLS secret key to be kept... well, secret.
+
+At the moment, `tlspyo` ships with a default TLS "private" key and public certificate to ensure that communication is possible out of the box **on your secure private network**.
+However, **THIS "PRIVATE" KEY IS IN FACT PUBLIC** since it is part of the open-source code, and **it must NOT be used on a machine that is visible from a public network** (e.g., not protected by a router).
+
+### Generate your own self-signed TLS certificate and private key
+
+Generate your secret key with the following command:
 ```bash
 openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certificate.pem
 ```
-You will be asked some questions and a certificate and a private key will be generated. Make sure to take careful note of the **common name/hostname** that you choose as you must specify it when you want to initialize an endpoint. These two need to be stored in the same directory which must be specified when initializing the relay and all endpoints. Make sure that these certificates match or authentication of your endpoints to your relay will fail. 
+You will be asked some questions and a certificate and a private key will be generated.
+Make sure to take careful note of the **common name/hostname** that you choose as you must specify it when you want to initialize an endpoint.
+These two need to be stored in the same directory which must be specified when initializing the relay and all endpoints.
+Make sure that these certificates match or authentication of your endpoints to your relay will fail. 
 ```python
 re = Relay(
     port=3000,
     password="VerySecurePassword",
-    accepted_groups=None,
     local_com_port=3001,
-    header_size=12,
-    keys_dir="PATH_TO_MY_KEYS" # Change this
+    keys_dir="PATH_TO_YOUR_KEYS" # Change this
 )
 
-re = Relay(
+ep = Endpoint(
     port=3000,
     password="VerySecurePassword",
-    accepted_groups=None,
-    local_com_port=3001,
-    header_size=12,
+    groups="my group",
+    local_com_port=3002,
     keys_dir="PATH_TO_YOUR_KEYS", # Change this
     hostname="YOUR_HOSTNAME" # Change this
 )
  ```
 
-**:warning:IMPORTANT NOTE:warning:**
-This library uses pickle to serialize objects before sending them over the network. Someone who knows your password and has access to your relay public IP address could send some malevolent pickled object which could execute arbitrary code on your machine. **Please make sure to keep your password and your key/certificate pair safe!**
+**:warning:SUMMARY:warning:**
+This library uses `pickle` to serialize objects before sending them over the network.
+Someone who knows your password and has access to your relay public IP address could send you malevolent pickled object, resulting in arbitrary code execution on your machine. **Please make sure to keep your password and private key safe!**
+
+
+## External links
+
+`tlspyo` is an open-source project hosted at [Polytechnique Montreal - MISTlab](https://mistlab.ca).
+We use it in various projects, ranging from parallel [meta-learning](https://github.com/Portiloop) to data transfer between multiple [learning robots](https://github.com/trackmania-rl/tmrl).
+
+`tlspyo` relies on [Twisted](https://twisted.org) to manage network robustness and security.
 
 ## Contributing
 
