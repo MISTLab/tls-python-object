@@ -27,7 +27,6 @@ setup(name='tlspyo',
       long_description_content_type="text/markdown",
       author='Yann Bouteiller, Milo Sobral',
       url='https://github.com/MISTLab/tls-python-object',
-      download_url='',
       keywords=['python', 'tls', 'ssl', 'pickle', 'transfer', 'object', 'transport', 'twisted'],
       install_requires=[
         'twisted',
