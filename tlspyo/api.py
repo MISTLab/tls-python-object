@@ -50,6 +50,7 @@ class Relay:
 
         assert accepted_groups is None or isinstance(accepted_groups, dict), "Invalid format for accepted_groups."
 
+        self._stopped = False
         self._header_size = header_size
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
@@ -68,7 +69,6 @@ class Relay:
         self._p.start()
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
         self._send_local('TEST')
-        self._stopped = False
 
     def __del__(self):
         self.stop()
@@ -124,6 +124,8 @@ class Endpoint:
             connection = "TLS"
         assert connection in ("TCP", "TLS"), f"Unsupported connection: {connection}"
 
+        self._stopped = False
+
         # threading for local object receiving
         self.__obj_buffer = queue.Queue()
         self.__socket_closed_lock = Lock() 
@@ -159,8 +161,6 @@ class Endpoint:
 
         self._t_manage_received_objects = Thread(target=self._manage_received_objects, daemon=True)
         self._t_manage_received_objects.start()
-
-        self._stopped = False
 
     def __del__(self):
         self.stop()
