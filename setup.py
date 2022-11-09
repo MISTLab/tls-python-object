@@ -1,5 +1,12 @@
 from setuptools import setup, find_packages
 
+from pathlib import Path
+
+
+DEFAULT_KEYS_FOLDER = Path.home() / "tlspyo" / "credentials"
+if not DEFAULT_KEYS_FOLDER.exists():
+    DEFAULT_KEYS_FOLDER.mkdir(parents=True, exist_ok=True)
+
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -9,7 +16,7 @@ setup(name='tlspyo',
       packages=[package for package in find_packages()],
       include_package_data=True,
       package_data={"tlspyo": ["*.pem"]},
-      version='0.1.0',
+      version='0.1.1',
       license='MIT',
       description='Secure transport of python objects using TLS encryption',
       long_description=long_description,
@@ -24,7 +31,7 @@ setup(name='tlspyo',
         'service_identity'
         ],
       extras_requires={
-        "dev": ['pytest','pytest-timeout']
+        "dev": ['pytest', 'pytest-timeout']
       },
       classifiers=[
           'Development Status :: 4 - Beta',
@@ -36,6 +43,6 @@ setup(name='tlspyo',
           'Operating System :: Microsoft :: Windows',
           'Operating System :: POSIX',
           'Programming Language :: Python',
-          'Topic :: Scientific/Engineering :: Artificial Intelligence',
+          'Topic :: Utilities',
       ],
       )

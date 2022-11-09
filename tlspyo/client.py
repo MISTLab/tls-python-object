@@ -1,15 +1,16 @@
 import logging
 import pickle as pkl
 import time
-import OpenSSL
 import os
-from twisted.python.filepath import FilePath
 
+import OpenSSL
+from twisted.python.filepath import FilePath
 from twisted.internet import ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
-from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 
-DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.join('tlspyo', 'default_keys'))
+from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
+from tlspyo.credentials import DEFAULT_KEYS_FOLDER
+
 
 class ClientProtocol(Protocol):
     def __init__(self, client, password, header_size=10, groups=("default", )):
@@ -158,7 +159,7 @@ class Client:
             reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
         elif self._connection == "TLS":
             # Use default keys if none are provided
-            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'certificate.pem')
+            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS_FOLDER, 'certificate.pem')
             # Authenticates the server to all potential clients for TLS communication
             try:
                 certData = FilePath(self_signed).getContent()

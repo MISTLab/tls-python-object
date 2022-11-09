@@ -1,7 +1,10 @@
-# tlspyo
-**A library for secure transfer of python objects over network**
+# tls-python-object (tlspyo)
+
+**A library for secure transfer of python objects over network.**
 
 [![Python package](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml/badge.svg)](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml)
+
+:computer: :globe_with_meridians: :computer:
 
 `tlspyo` provides a simple API to transfer python objects in a robust and safe way via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), between several machines (and/or processes) called `Endpoints`.
 
@@ -9,36 +12,64 @@
 - Arbitrarily many `Endpoints` connect together via a central `Relay`,
 - Each `Endpoint` can *broadcast* or *produce* python objects to the desired groups.
 
-:warning: By default, `tlspyo` serializes python objects via `pickle`.
-Internet safety is achieved via TLS and requires a minimal but **MANDATORY** amount of effort from the user, without which using `tlspyo` (or any similar approach) on a publicly exposed network [**would be a serious security breach**](https://www.synopsys.com/blogs/software-security/python-pickling/).
-Please carefully read the [Security](#security) section before using `tlspyo` anywhere other than your own secure private network.
+:information_source: _Please carefully read the [Security](#security) section before using `tlspyo` anywhere other than your own secure private network._
 
 
-## Installation
-```bash
-pip install tlspyo
-```
+## Principle
 
-
-## Getting Started
-`tlspyo` uses two classes: `Relay` and  `Endpoint`.
-```python
-from tlspyo import Relay, Endpoint
-```
+`tlspyo` provides two classes: `Relay` and  `Endpoint`.
 
 * The `Relay` is the center point of all communication between `Endpoints`,
 * An `Endpoint` is a node in your network. It connects to the `Relay` and is part of one to several `groups`.
 
 `Endpoints` can do a multitude of things, including:
-- *broadcast* objects to whole groups of `Endpoints`,
+- *broadcast* python objects to whole groups of `Endpoints`,
 - *retrieve* the objects broadcast to the group(s) it is part of,
 - *produce* a single object that will be consumed by a single `Endpoint` of a target group,
 - *notify* the `Relay` that it is ready to consume a produced object and wait until it receives it.
 
+By default, `tlspyo` relies on Transport Layer Security (TLS) to secure object transfers over network.
+
+
+## Getting Started
+
+### Installation
+From PyPI:
+```bash
+pip install tlspyo
+```
+:information_source: _In case pip throws a permission error, manually create the `tlspyo/credentials` directory in your home directory and try again._
+
+### TLS setup:
+
+`tlspyo` makes the process of generating your TLS credentials (a private key and a public certificate) straightforward.
+
+When you installed `tlspyo`, pip has generated a `tlspyo` folder in your home directory, containing a `credentials` subfolder.
+This subfolder is where credentials will be stored by default.
+
+:arrow_forward: On the machine that will host your `Relay`, execute the following command line:
+```bash
+python -m tlspyo --credentials
+ ```
+This will generate two files in the `tlspyo/credentials` folder: `key.pem` and `certificate.pem`.
+
+:arrow_forward: Copy `certificate.pem` into the `tlspyo/credentials` folder of the machines that will host your `Endpoints` _(note: you only need this step in case your `Endpoints` are not on the same machine as your `Relay`)._
+
+You are all set! :sunglasses:
+
+:information_source: _In case you wish to customize your TLS certificate, add the `--custom` option to the command line._
+
 
 ### A Simple Producer-Consumer Example
 
+Let us now see how to make basic usage of `tlspyo`.
+In this example, we will create a `Relay` and two `Endpoints` on the same machine, and have them transfer objects via `localhost`.
 The full script for this example can be found [here](https://github.com/MISTLab/tls-python-object/blob/main/examples/example_doc.py).
+
+Import the `Relay` and `Endpoint` classes:
+```python
+from tlspyo import Relay, Endpoint
+```
 
 #### Relay
 
@@ -46,9 +77,9 @@ Every `tlspyo` application requires a central `Relay`.
 
 The `Relay` lives on a machine that can be reached by all `Endpoints`.
 Typically, you will want this machine to be accessible to your `Endpoints` via your private local network, or via the Internet through [port forwarding](https://en.wikipedia.org/wiki/Port_forwarding).
-**Note however that, before you make your `Relay` visible to the Internet via, e.g., port forwarding, it is important that you thoroughly understand the [Security](#security) section.**
+**Note however that, before you make your `Relay` visible to the Internet via, e.g., port forwarding, it is important that you read the [Security](#security) section.**
 
-Creating a `Relay` is simple:
+Creating a `Relay` is straightforward:
 ```python
 # Initialize a relay to allow connectivity between endpoints
 
@@ -63,7 +94,7 @@ Behind the scenes, it is now waiting for TLS connections from `Endpoints`.
 This is done in a background process that listens to `port` 3000 in this example.
 This process also communicates with your `Relay` via `local_com_port` 3001 in this example.
 
-Usually, you can ignore `local_com_port` unless you use several `Endpoints/Relay` on the same machine, which we will do for the sake of illustration.
+Usually, you can ignore `local_com_port` and leave it to the default, unless you use several `Endpoints/Relay` on the same machine, which we will do.
 
 #### Endpoints
 Now that our `Relay` is ready, let us create a bunch of `Endpoints`.
@@ -98,16 +129,16 @@ cons_2 = Endpoint(
 ) 
 ```
  A nice thing about `tlspyo` is that all communication is handled behind the scenes.
- The above calls have all launched processes in the background which handle connection and communication between `Endpoints` through the `Relay`, so that you don't have to make any blocking calls except when you want to!
+ The above calls have all launched processes in the background which handle connection and communication between `Endpoints` through the `Relay`.
 
  Let us now send some objects from the producer to the consumers.
  As you may have noticed, we created two different groups here.
  We put the producer in a group that we have named "producers", and the consumers in another group that we have called "consumers".
- Note that `Endpoint` can be created as being part of any number of groups (`groups` can take a sequence of strings).
+ Note that `Endpoint` can be created as being part of any number of groups (`groups` can take a list of strings).
  When communicating between endpoints, you can use those groups to make sure the right endpoints receive the right objects.
 
  There are two ways for `Endpoints` to send objects in `tlspyo`:
- * **Broadcasting** is used to send an an object to all endpoint in a given group.
+ * **Broadcasting** is used to send an object to all endpoint in a given group.
 Furthermore, when an `Endpoint` connects to the `Relay`, it receives the last object that was broadcast to each of his groups.
     ```python
     # Producer broadcasts an object to any and all endpoint in the destination group "consumers"
@@ -127,12 +158,12 @@ The endpoints of the receiving group must **Notify** the `Relay` to get access t
 Once objects reach the consumer endpoint, they are stored in a local queue from which you can retrieve objects whenever you want. To do this, there are multiple options:
 * To retrieve from the local queue in a FIFO fashion, use `pop(blocking=blocking, max_items=max_items)`.
 * To retrieve the most recent item(s) in the local queue and discard the rest, use `get_last(blocking=blocking, max_items=max_items)`.
-* To get all items that are currently in the local queue, use `retrieve_all(blocking=blocking)`. 
+* To get all items that are currently in the local queue, use `receive_all(blocking=blocking)`. 
 
-**Notes:** 
-* All calls above return a list of objects. If no objects are returned, the result will be an empty list.
-* If `blocking` is `True`, all methods above will block until at least one item is received (default to `False`).
-* Use `max_items` to specify a maximum number of items to be returned (defaults to 1).
+:information_source: _Notes:_
+* _All calls above return a list of objects. If no objects are returned, the result will be an empty list._
+* _If `blocking` is `True`, all methods above will block until at least one item is received (default to `False`)._
+* _In`pop` and `get_last`, use `max_items` to specify a maximum number of items to be returned (defaults to 1)._
 
 Now, let our consumers retrieve their loot:
 ```python
@@ -174,64 +205,27 @@ Please submit a detailed issue if you are aware of any important exploit not cov
 
 ### Implementation
 
-`tlspyo` largely relies on the [Twisted](https://twisted.org) framework regarding [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) implementation and network management.
+`tlspyo` relies on the [Twisted](https://twisted.org) framework regarding [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) implementation and network management.
 
 ### Important to know
 
-Objects transfered by `tlspyo` are pickled by default, so that you can transfer most python objects easily.
-If you use `tlspyo` on a machine that is visible from a public network (such as the Internet), failing to follow the security instructions provided thereafter would make you vulnerable to [dangerous exploits](https://davidhamann.de/2020/04/05/exploiting-python-pickle/).
+:warning: Objects transfered by `tlspyo` are serialized with `pickle` by default, so that you can transfer most python objects easily.
 
+If you use `tlspyo` (or any similar approach) on a machine that is visible from a public network, failing to follow the security instructions provided thereafter could make you vulnerable to [dangerous exploits](https://davidhamann.de/2020/04/05/exploiting-python-pickle/).
 This is because unpickling untrusted pickled objects (i.e., pickled objects created by a malicious user) can lead to arbitrary code execution on your machine.
 
-To prevent this from happening, `tlspyo` provides two interdependent layers of security that you must configure when using the library on a machine that is visible from the Internet:
-* `Endpoints` authenticate your `Relay` via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), which must use your own secret key and public certificate.
-When done correctly, this ensures your `Endpoints` are indeed talking to your `Relay` and not to some [man-in-the-middle](https://en.wikipedia.org/wiki/Man-in-the-middle_attack).
+To prevent this from happening, `tlspyo` provides two interdependent layers of security:
+* `Endpoints` authenticate your `Relay` via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), which must use [your own secret key and public certificate](#tls-setup).
+This ensures your `Endpoints` are indeed talking to your `Relay` and not to some [man-in-the-middle](https://en.wikipedia.org/wiki/Man-in-the-middle_attack), **provided you keep your secret key secure**.
 This also prevents anyone else from [eavesdropping](https://en.wikipedia.org/wiki/Eavesdropping) thanks to TLS encryption.
-* Every object transfer is protected by a password known to both the `Relay` and the `Endpoints`.
+* Every object transfer is protected by a password known to both the `Relay` and the `Endpoints` (`password` argument).
 No object is deserialized without verification of the password.
-This ensures that anyone posing as an endpoint will never be able to send undesired objects through your relay unless they know the password.
+This ensures that anyone posing as an endpoint will never be able to send undesired objects through your relay **unless they know your password**.
 
 If a malicious user successfully posed as your `Relay`, your `Endpoint` would send them messages that they could decrypt, including your password (this is prevented by TLS when using your own secret key and public certificate).
 If they successfully posed as your `Endpoint` they could send malicious pickled objects to your `Relay` (this is prevented by them not knowing your password).
-Thus, it is required that you configure both layers of security.
 
-In a nutshell, you want your password to be as strong as possible, and your TLS secret key to be kept... well, secret.
-
-At the moment, `tlspyo` ships with a default TLS "private" key and public certificate to ensure that communication is possible out of the box **on your secure private network**.
-However, **THIS "PRIVATE" KEY IS IN FACT PUBLIC** since it is part of the open-source code, and **it must NOT be used on a machine that is visible from a public network** (e.g., not protected by a router).
-
-### Generate your own self-signed TLS certificate and private key
-
-Generate your secret key with the following command:
-```bash
-openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certificate.pem
-```
-You will be asked some questions and a certificate and a private key will be generated.
-Make sure to take careful note of the **common name/hostname** that you choose as you must specify it when you want to initialize an endpoint.
-These two need to be stored in the same directory which must be specified when initializing the relay and all endpoints.
-Make sure that these certificates match or authentication of your relay to your endpoints will fail. 
-```python
-re = Relay(
-    port=3000,
-    password="VerySecurePassword",
-    local_com_port=3001,
-    keys_dir="PATH_TO_YOUR_KEYS" # Change this
-)
-
-ep = Endpoint(
-    port=3000,
-    password="VerySecurePassword",
-    groups="my group",
-    local_com_port=3002,
-    keys_dir="PATH_TO_YOUR_KEYS", # Change this
-    hostname="YOUR_HOSTNAME" # Change this
-)
- ```
-
-**:warning:SUMMARY:warning:**
-This library uses `pickle` to serialize objects before sending them over the network.
-Someone who knows your password and has access to your relay public IP address could send you malevolent pickled object, resulting in arbitrary code execution on your machine. **Please make sure to keep your password and private key safe!**
-
+In a nutshell, you want your password to be as strong as possible, and your TLS secret key to be kept... well, secret :lock:
 
 ## External links
 

@@ -1,21 +1,15 @@
 import logging
+import os
 import pickle as pkl
-from ssl import SSLError
 import time
 from collections import deque
 
+import OpenSSL
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import ssl
 
-import OpenSSL
-
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
-import os
-
-from twisted.python.filepath import FilePath
-
-
-DEFAULT_KEYS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.path.join('tlspyo', 'default_keys'))
+from tlspyo.credentials import DEFAULT_KEYS_FOLDER
 
 
 class ServerProtocol(Protocol):
@@ -249,8 +243,8 @@ class Server:
             reactor.listenTCP(self._port, factory)
         elif self._connection == "TLS":
             # Use default keys if none are provided
-            private_key = os.path.join(self._keys_dir, 'key.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'key.pem')
-            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS, 'certificate.pem')
+            private_key = os.path.join(self._keys_dir, 'key.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS_FOLDER, 'key.pem')
+            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS_FOLDER, 'certificate.pem')
             # Authenticates the server to all potential clients for TLS communication
             try:
                 context = ssl.DefaultOpenSSLContextFactory(private_key, self_signed)
