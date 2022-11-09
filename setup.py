@@ -20,6 +20,7 @@ with open("README.md", "r") as fh:
 setup(name='tlspyo',
       packages=[package for package in find_packages()],
       version='0.1.1',
+      download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.1.1.tar.gz',
       license='MIT',
       description='Secure transport of python objects using TLS encryption',
       long_description=long_description,
