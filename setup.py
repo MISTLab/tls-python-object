@@ -1,6 +1,11 @@
 from setuptools import setup, find_packages
+import sys
 
 from pathlib import Path
+
+
+if sys.version_info < (3, 7):
+    sys.exit('Sorry, Python < 3.7 is not supported, upgrade your python installation to use tlspyo.')
 
 
 DEFAULT_KEYS_FOLDER = Path.home() / "tlspyo" / "credentials"
