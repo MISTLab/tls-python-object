@@ -1,3 +1,0 @@
-# MANIFEST.in
-
-include tlspyo/default_keys/*.pem
