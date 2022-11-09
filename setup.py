@@ -14,8 +14,6 @@ with open("README.md", "r") as fh:
 
 setup(name='tlspyo',
       packages=[package for package in find_packages()],
-      include_package_data=True,
-      package_data={"tlspyo": ["*.pem"]},
       version='0.1.1',
       license='MIT',
       description='Secure transport of python objects using TLS encryption',

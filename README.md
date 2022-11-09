@@ -1,10 +1,8 @@
 # tls-python-object (tlspyo)
 
-**A library for secure transfer of python objects over network.**
+:computer: :globe_with_meridians: :computer: **A library for secure transfer of python objects over network.**
 
 [![Python package](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml/badge.svg)](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml)
-
-:computer: :globe_with_meridians: :computer:
 
 `tlspyo` provides a simple API to transfer python objects in a robust and safe way via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), between several machines (and/or processes) called `Endpoints`.
 
