@@ -207,7 +207,7 @@ Please submit a detailed issue if you are aware of any important exploit not cov
 
 ### Important to know
 
-:warning: Objects transfered by `tlspyo` are serialized with `pickle` by default, so that you can transfer most python objects easily.
+:warning: Objects transferred by `tlspyo` are serialized with `pickle` by default, so that you can transfer most python objects easily.
 
 If you use `tlspyo` (or any similar approach) on a machine that is visible from a public network, failing to follow the security instructions provided thereafter could make you vulnerable to [dangerous exploits](https://davidhamann.de/2020/04/05/exploiting-python-pickle/).
 This is because unpickling untrusted pickled objects (i.e., pickled objects created by a malicious user) can lead to arbitrary code execution on your machine.
