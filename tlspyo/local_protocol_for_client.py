@@ -1,7 +1,8 @@
-import logging
 import pickle as pkl
 
 from twisted.internet.protocol import Protocol, ClientFactory
+
+from tlspyo.logs import logger
 
 
 class LocalProtocolForClient(Protocol):
@@ -37,19 +38,19 @@ class LocalProtocolForClient(Protocol):
                         if self._client.to_server is not None and self._state == "ALIVE" and self._client.to_server.get_state() == "ALIVE":
                             self._client.to_server.send_obj(cmd=cmd, dest=dest, obj=obj_bytes)
                         else:
-                            logging.warning('The client is not connected to the Internet server, storing message.')
+                            logger.warning('The client is not connected to the Internet server, storing message.')
                             self._client.store.append((cmd, dest, obj_bytes))
                     elif cmd == 'TEST':
                         pass
                     else:
-                        logging.warning(f"Local: Invalid command: {cmd}")
+                        logger.warning(f"Local: Invalid command: {cmd}")
                         self._state = "CLOSED"
                         self.transport.abortConnection()
                     # truncate the processed part of the buffer:
                     self._buffer = self._buffer[j:]
                     i, j = self.process_header()
         except Exception as e:
-            logging.warning(f"Local: Unhandled exception: {e}")
+            logger.warning(f"Local: Unhandled exception: {e}")
             self._state = "KILLED"
             self.transport.abortConnection()
             raise e
@@ -70,14 +71,14 @@ class LocalProtocolForClientFactory(ClientFactory):
         self.client = client
 
     def startedConnecting(self, connector):
-        logging.info('Local: Started to connect.')
+        logger.info('Local for client: Started to connect.')
 
     def buildProtocol(self, addr):
-        logging.info('Local: Connected.')
+        logger.info('Local for client: Connected.')
         return LocalProtocolForClient(self.client)
 
     def clientConnectionLost(self, connector, reason):
-        logging.info(f'Local: Client lost connection.  Reason: {reason.getErrorMessage()}')
+        logger.info(f'Local for client: lost connection.  Reason: {reason.getErrorMessage()}')
 
     def clientConnectionFailed(self, connector, reason):
-        logging.info(f'Local: Client connection failed. Reason: {reason.getErrorMessage()}')
+        logger.info(f'Local for client: connection failed. Reason: {reason.getErrorMessage()}')

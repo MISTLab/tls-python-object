@@ -1,7 +1,8 @@
-import logging
 import pickle as pkl
 
 from twisted.internet.protocol import Protocol, ClientFactory
+
+from tlspyo.logs import logger
 
 
 class LocalProtocolForServer(Protocol):
@@ -38,14 +39,14 @@ class LocalProtocolForServer(Protocol):
                     elif cmd == 'TEST':
                         pass
                     else:
-                        logging.warning(f"Local: Invalid command: {cmd}")
+                        logger.warning(f"Local: Invalid command: {cmd}")
                         self._state = "CLOSED"
                         self.transport.abortConnection()
                     # truncate the processed part of the buffer:
                     self._buffer = self._buffer[j:]
                     i, j = self.process_header()
         except Exception as e:
-            logging.warning(f"Local: Unhandled exception: {e}")
+            logger.warning(f"Local: Unhandled exception: {e}")
             self._state = "KILLED"
             self.transport.abortConnection()
             raise e
@@ -66,14 +67,14 @@ class LocalProtocolForServerFactory(ClientFactory):
         self.server = server
 
     def startedConnecting(self, connector):
-        logging.info('Local: Started to connect.')
+        logger.info('Local for server: Started to connect.')
 
     def buildProtocol(self, addr):
-        logging.info('Local: Connected.')
+        logger.info('Local for server: Connected.')
         return LocalProtocolForServer(self.server)
 
     def clientConnectionLost(self, connector, reason):
-        logging.info(f'Local: Client lost connection.  Reason: {reason.getErrorMessage()}')
+        logger.info(f'Local for server: lost connection.  Reason: {reason.getErrorMessage()}')
 
     def clientConnectionFailed(self, connector, reason):
-        logging.info(f'Local: Client connection failed. Reason: {reason.getErrorMessage()}')
+        logger.info(f'Local for server: Client connection failed. Reason: {reason.getErrorMessage()}')

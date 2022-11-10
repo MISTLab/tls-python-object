@@ -1,4 +1,3 @@
-import logging
 import pickle as pkl
 import time
 import os
@@ -10,6 +9,7 @@ from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
 from tlspyo.credentials import DEFAULT_KEYS_FOLDER
+from tlspyo.logs import logger
 
 
 class ClientProtocol(Protocol):
@@ -45,10 +45,10 @@ class ClientProtocol(Protocol):
                 stamp, cmd, obj = pkl.loads(self._buffer[i:j])
                 if cmd == 'ACK':
                     try:
-                        logging.info(f"ACK received after {time.monotonic() - self._client.pending_acks[stamp][0]}s.")
+                        logger.info(f"ACK received after {time.monotonic() - self._client.pending_acks[stamp][0]}s.")
                         del self._client.pending_acks[stamp]  # delete pending ACK
                     except KeyError:
-                        logging.warning(f"Received ACK for stamp {stamp} not present in pending ACKs.")
+                        logger.warning(f"Received ACK for stamp {stamp} not present in pending ACKs.")
                 else:
                     self.send_ack(stamp)  # send ACK
                     if cmd == "HELLO":
@@ -61,14 +61,14 @@ class ClientProtocol(Protocol):
                             self._client.store = self._client.store[1:]  # remove buffered command from store
                     else:
                         if self._state != "ALIVE":
-                            logging.warning(f"Received a command in a bad state: {self._state}.")
+                            logger.warning(f"Received a command in a bad state: {self._state}.")
                         if cmd == "OBJ":
-                            logging.debug(f"Received object, transferring to local EndPoint.")
+                            logger.debug(f"Received object, transferring to local EndPoint.")
                             # transfer the object to the EndPoint server
                             if self._client.endpoint is not None:
                                 self._client.endpoint.transport.write(self._buffer[:j])
                             else:
-                                logging.warning(f"Local EndPoint is not connected, discarding object.")
+                                logger.warning(f"Local EndPoint is not connected, discarding object.")
                 # truncate the processed part of the buffer:
                 self._buffer = self._buffer[j:]
                 i, j = self.process_header()
@@ -99,19 +99,19 @@ class TLSClientFactory(ReconnectingClientFactory):
         self._client = client
 
     def startedConnecting(self, connector):
-        logging.info('Started to connect.')
+        logger.info('Started to connect.')
 
     def buildProtocol(self, addr):
-        logging.info('Connected.')
+        logger.info('Connected.')
         self.resetDelay()
         return ClientProtocol(client=self._client, password=self.password, groups=self._groups, header_size=self._header_size)
 
     def clientConnectionLost(self, connector, reason):
-        logging.info(f'Lost connection.  Reason: {reason.getErrorMessage()}')
+        logger.info(f'Lost connection.  Reason: {reason.getErrorMessage()}')
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
     def clientConnectionFailed(self, connector, reason):
-        logging.info(f'Connection failed. Reason: {reason.getErrorMessage()}')
+        logger.info(f'Connection failed. Reason: {reason.getErrorMessage()}')
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
 
 
@@ -175,7 +175,7 @@ class Client:
                 contextFactory=ssl.optionsForClientTLS(hostname=self._hostname, trustRoot=authority)
             )
         else:
-            logging.warning(f"Unsupported connection: {self._connection}")
+            logger.warning(f"Unsupported connection: {self._connection}")
         
         # Start the reactor
         self._reactor = reactor
@@ -196,13 +196,13 @@ class Client:
     def close(self, counter):
 
         # Check if we are allowed to leave by looking at acknowledgements
-        logging.debug(f"Attempting to terminate Endpoint for {counter}th time")
+        logger.debug(f"Attempting to terminate Endpoint for {counter}th time")
 
         if self.check_acks() or counter > 10:
             if self._reactor is not None:
                 if self.to_server is not None:
                     self.to_server.transport.loseConnection()
-                logging.info(f"Succesfully terminated endpoint connections")
+                logger.info(f"Succesfully terminated endpoint connections")
                 self._reactor.stop()
         else:
             from twisted.internet import reactor

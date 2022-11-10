@@ -1,4 +1,3 @@
-import logging
 import os
 import pickle as pkl
 import time
@@ -10,6 +9,7 @@ from twisted.internet import ssl
 
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
 from tlspyo.credentials import DEFAULT_KEYS_FOLDER
+from tlspyo.logs import logger
 
 
 class ServerProtocol(Protocol):
@@ -28,7 +28,7 @@ class ServerProtocol(Protocol):
         self.send_obj(cmd="HELLO")
 
     def connectionLost(self, reason):
-        logging.info(f"Connection lost: {reason.getErrorMessage()}")
+        logger.info(f"Connection lost: {reason.getErrorMessage()}")
         if self._server.has_client(self._identifier):
             self._server.delete_client(self._identifier)
         assert not self._server.has_client(self._identifier)
@@ -44,7 +44,7 @@ class ServerProtocol(Protocol):
         psw = self._buffer[self._header_size:i]
         psw = psw.decode('utf8')
         if psw != self._password:
-            logging.info(f"Invalid password: {psw}")
+            logger.info(f"Invalid password: {psw}")
             self._state = "KILLED"
             self.transport.abortConnection()
         return i, j, psw
@@ -63,7 +63,7 @@ class ServerProtocol(Protocol):
                         try:
                             del self._server.pending_acks[stamp]  # delete pending ACK
                         except KeyError:
-                            logging.warning(f"Received ACK for stamp {stamp} not present in pending ACKs.")
+                            logger.warning(f"Received ACK for stamp {stamp} not present in pending ACKs.")
                     else:
                         self.send_ack(stamp)  # send ACK
                         if isinstance(dest, str):
@@ -73,7 +73,7 @@ class ServerProtocol(Protocol):
                             if isinstance(groups, str):
                                 groups = (groups,)
                             if self._server.check_new_client(groups=groups):
-                                logging.info(f"New client with groups {groups}.")
+                                logger.info(f"New client with groups {groups}.")
                                 self._identifier = self._server.add_client(groups=groups, client=self)
                                 self._state = "ALIVE"
                                 self.retrieve_broadcast()
@@ -82,13 +82,13 @@ class ServerProtocol(Protocol):
                                 self.transport.loseConnection()
                         elif self._state == "ALIVE":
                             if cmd == "OBJ":
-                                logging.debug(f"Received object {pkl.loads(obj)} from client {self._identifier} for groups {dest}.")
+                                logger.debug(f"Received object {pkl.loads(obj)} from client {self._identifier} for groups {dest}.")
                                 self.forward_obj_to_dest(obj=obj, dest=dest)
                             elif cmd == "NTF":
-                                logging.debug(f"Received notification from client {self._identifier} for destination {dest}.")
+                                logger.debug(f"Received notification from client {self._identifier} for destination {dest}.")
                                 self.retrieve_consumables(groups=dest)
                             else:
-                                logging.warning(f"Invalid command: {cmd}")
+                                logger.warning(f"Invalid command: {cmd}")
                                 self._state = "CLOSED"
                                 self.transport.loseConnection()
                     # truncate the processed part of the buffer:
@@ -97,7 +97,7 @@ class ServerProtocol(Protocol):
                     if self._state == "KILLED":
                         return
         except Exception as e:
-            logging.warning(f"Unhandled exception: {e}")
+            logger.warning(f"Unhandled exception: {e}")
             self._state = "KILLED"
             self.transport.abortConnection()
             raise e
@@ -120,26 +120,28 @@ class ServerProtocol(Protocol):
                 if self._identifier in d_group['ids']:
                     to_broadcast = d_group['to_broadcast']
                     if to_broadcast is not None:
-                        logging.debug("Sending object {to_broadcast} from retrieve broadcast")
+                        logger.debug("Sending object {to_broadcast} from retrieve broadcast")
                         self.send_obj(cmd='OBJ', obj=to_broadcast)
 
     def retrieve_consumables(self, groups):
         if self._identifier is not None:
-            for origin, n in groups.items():
-                for group, d_group in self._server.group_info.items():
-                    if origin == group and self._identifier in d_group['ids']:
+            for origin, n in groups.items():  # for each requested origin and requested number of consumables
+                if origin in self._server.group_info.keys():
+                    d_group = self._server.group_info[origin]
+                    if self._identifier in d_group['ids']:
                         if n > 0:
                             # add pending consumables from this group for this client
                             d_group['pending_consumers'][self._identifier] += n
+                            logger.debug(f"Pending consumables for client {self._identifier} from group {origin}: {d_group['pending_consumers'][self._identifier]}")
                             # retrieve available pending consumables
-                            self.dispatch_pending_consumables(group)
+                            self.dispatch_pending_consumables(origin)
                         elif n < 0:
                             # send all available consumables from this group to this client
-                            self.send_all_consumables(group)
+                            self.send_all_consumables(origin)
 
     def dispatch_pending_consumables(self, group):
         # retrieve at most n available consumables from this group
-        logging.debug(f"Dispatching consumables from group {group}.")
+        logger.debug(f"Dispatching consumables from group {group}.")
         if group in self._server.group_info.keys():
             d_group = self._server.group_info[group]
             to_consume = d_group['to_consume']
@@ -148,10 +150,10 @@ class ServerProtocol(Protocol):
                 while pending_consumers[id] > 0 and len(to_consume) > 0:
                     pending_consumers[id] -= 1
                     obj = to_consume.popleft()
-                    logging.debug(f"Sending a consumable to client {id} from group {group} (remaining: {pending_consumers[id]}).")
+                    logger.debug(f"Sending a consumable to client {id} from group {group} (remaining: {pending_consumers[id]}).")
                     self._server.to_clients[id].send_obj(cmd='OBJ', obj=obj)
         else:
-            logging.warning(f"Group {group} is not registered in the server.")
+            logger.warning(f"Group {group} is not registered in the server.")
 
     def send_all_consumables(self, group):
         # retrieve all available consumables from this group
@@ -160,7 +162,7 @@ class ServerProtocol(Protocol):
             to_consume = d_group['to_consume']
             pending_consumers = d_group['pending_consumers']
             while len(to_consume) > 0:
-                logging.debug(f'Sending a consumable to client {self._identifier} from group {group}.')
+                logger.debug(f'Sending a consumable to client {self._identifier} from group {group}.')
                 obj = to_consume.popleft()
                 self.send_obj(cmd='OBJ', obj=obj)
 
@@ -175,11 +177,11 @@ class ServerProtocol(Protocol):
                         d_g['to_broadcast'] = obj
                         ids = d_g['ids']
                         for id_cli in ids:
-                            logging.debug(f"Sending object {pkl.loads(obj)} from group {group} to identifier {id_cli}.")
+                            logger.debug(f"Sending object {pkl.loads(obj)} from group {group} to identifier {id_cli}.")
                             self._server.to_clients[id_cli].send_obj(cmd='OBJ', obj=obj)
                     elif value > 0:
                         # add object to group's consumables
-                        logging.debug(f"Adding {value} copies of the consumable {pkl.loads(obj)} to group {group}.")
+                        logger.debug(f"Adding {value} copies of the consumable {pkl.loads(obj)} to group {group}.")
                         for _ in range(value):
                             d_g['to_consume'].append(obj)
                         self.dispatch_pending_consumables(group)
@@ -196,7 +198,7 @@ class ServerProtocolFactory(Factory):
         self.server = server
 
     def buildProtocol(self, addr):
-        logging.info('Connected.')
+        logger.info('Connected.')
         return ServerProtocol(self.server)
 
 
@@ -240,6 +242,7 @@ class Server:
         # Start relay server
         factory = ServerProtocolFactory(self)
         if self._connection == "TCP":
+            logger.info(f"Listening on TCP to port {self._port}")
             reactor.listenTCP(self._port, factory)
         elif self._connection == "TLS":
             # Use default keys if none are provided
@@ -251,10 +254,11 @@ class Server:
             except OpenSSL.SSL.Error:
                 raise AttributeError("The provided keys directory could not be found or does not contain the necessary keys. \
                     Make sure that you are providing a correct path, that your private key is named 'private.key' and that your public key is named 'selfsigned.crt'. \
-                        You can use the script generate_certificates.py to generate the keys.")
+                    You can use the script generate_certificates.py to generate the keys.")
+            logger.info(f"Listening on TLS to port {self._port}, with credentials {private_key} and {self_signed}")
             reactor.listenSSL(self._port, factory, context)
         else:
-            logging.warning(f"Unsupported connection: {self._connection}")
+            logger.warning(f"Unsupported connection: {self._connection}")
             return
 
         self._reactor = reactor
@@ -284,12 +288,12 @@ class Server:
         if self._accepted_groups is not None:
             for group in groups:
                 if group not in self._accepted_groups.keys():
-                    logging.info(f"Invalid group {group}.")
+                    logger.info(f"Invalid group {group}.")
                     return False
                 if group in self.group_info.keys():
                     max_count = self._accepted_groups[group]['max_count']
                     if max_count is not None and len(self.group_info[group]['ids']) >= max_count:
-                        logging.info(f"Cannot add more clients to group {group}.")
+                        logger.info(f"Cannot add more clients to group {group}.")
                         return False
         return True
 
@@ -299,7 +303,7 @@ class Server:
         self.to_clients[identifier] = client
         for group in groups:
             if self.try_add_group(group):
-                logging.debug(f"Adding client {identifier} to group {group}.")
+                logger.debug(f"Adding client {identifier} to group {group}.")
                 self.group_info[group]['ids'].append(identifier)
                 self.group_info[group]['pending_consumers'][identifier] = 0
         return identifier
@@ -313,14 +317,14 @@ class Server:
         """
         if self._accepted_groups is not None:
             if group not in self._accepted_groups.keys():
-                logging.info(f"Invalid group {group}.")
+                logger.info(f"Invalid group {group}.")
                 return False
         self.add_group(group)
         return True
 
     def add_group(self, group, max_consumables=None):
-        logging.debug(f"Adding group {group} to relay")
         if group not in self.group_info.keys():
+            logger.debug(f"Adding group {group} to relay")
             self.group_info[group] = {'ids': [],  # ids of the clients present in this group
                                       'to_broadcast': None,  # object to broadcast
                                       'to_consume': deque(maxlen=max_consumables) if max_consumables is not None else deque(),  # queue of objects to consume
@@ -331,10 +335,10 @@ class Server:
         for group, d_group in self.group_info.items():
             idents = d_group['ids']
             if identifier in idents:
-                logging.debug(f"Removing client {identifier} from group {group}.")
+                logger.debug(f"Removing client {identifier} from group {group}.")
                 idents.remove(identifier)
                 del d_group['pending_consumers'][identifier]
-        logging.debug(f"Removing client {identifier} from list of clients.")
+        logger.debug(f"Removing client {identifier} from list of clients.")
         del self.to_clients[identifier]
 
     def has_client(self, identifier):
@@ -352,7 +356,7 @@ class Server:
     def close(self, counter):
 
         # Check if we are allowed to leave by looking at acknowledgements
-        logging.debug(f"Attempting to terminate Relay for {counter}th time")
+        logger.debug(f"Attempting to terminate Relay for {counter}th time")
 
         if self.check_acks() or counter > 10:
             if self._reactor is not None:
@@ -360,7 +364,7 @@ class Server:
                 for identifier in identifiers:
                     self.to_clients[identifier].transport.loseConnection()
                     self.delete_client(identifier)
-                logging.info(f"Succesfully terminated relay connections")
+                logger.info(f"Succesfully terminated relay connections")
                 self._reactor.stop()
         else:
             from twisted.internet import reactor

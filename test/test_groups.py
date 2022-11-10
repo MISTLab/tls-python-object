@@ -116,12 +116,34 @@ class TestGroups(unittest.TestCase):
         self.assertEqual(len(r), 2, f"r:{r}")
         self.assertIn('test9', r, f"r:{r}")
         self.assertIn('test10', r, f"r:{r}")
-        ep2.notify(groups=('group1', 'group2'))  # note that ep2 is in group 1 and group 2
+        ep2.notify(groups=('group1', 'group2'))  # note that ep2 is in group 1 and group 2, but group 1 is empty
         r = []
         while len(r) < 3:
             r += ep2.receive_all(blocking=True)
         self.assertEqual(len(r), 3, f"r:{r}")
         self.assertTrue(same_lists_no_order(r, ['test9', 'test10', 'test10']), f"r:{r}")
+        ep5.send_object(obj='test11', destination={'group1': 1})  # let us send one more consumable to group 1
+        r = ep2.receive_all(blocking=True)  # now the notification sent by ep2 can be fulfilled
+        self.assertEqual(len(r), 1, f"r:{r}")
+        self.assertEqual(r[0], 'test11', f"r:{r}")
+
+        # test multiple producing / consuming
+
+        ep5.send_object(obj='test12', destination={'group1': 10})  # this produces to group 1 and 2
+        ep5.send_object(obj='test13', destination={'group2': 10})  # this produces to group 1 and 2
+        ep2.notify(groups={'group1': 1})  # retrieve 1 elt in group 1
+        r = []
+        while len(r) < 11:  # one consumable in group1 and all consumables is group 2
+            ep2.notify(groups={'group2': -1})  # ask for all elts in group 2
+            r += ep2.receive_all(blocking=True)
+        self.assertEqual(len(r), 11, f"r:{r}")
+        self.assertTrue(same_lists_no_order(r, ['test12', ] + ['test13', ] * 10), f"r:{r}")
+        r = []
+        while len(r) < 9:  # all remaining consumables in group 1
+            ep1.notify(groups={'group1': -1})  # ask for all elts in group 1
+            r += ep1.receive_all(blocking=True)
+        self.assertEqual(len(r), 9, f"r:{r}")
+        self.assertTrue(same_lists_no_order(r, ['test12', ] * 9), f"r:{r}")
 
     def test_groups_accept_some(self):
         sr = self.ht.spawn_relay
