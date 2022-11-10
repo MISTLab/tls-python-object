@@ -123,7 +123,7 @@ cons_2 = Endpoint(
     port=3000,
     password="VerySecurePassword",
     groups="consumers",  # this endpoint is part of group "consumers"
-    local_com_port=3003,  # must be unique
+    local_com_port=3004,  # must be unique
 ) 
 ```
  A nice thing about `tlspyo` is that all communication is handled behind the scenes.
