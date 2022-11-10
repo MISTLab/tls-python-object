@@ -351,7 +351,7 @@ class Endpoint:
         """
         cpy = []
         elem = get_from_queue(self.__obj_buffer, blocking)
-        assert len(elem) == 0 or blocking, 'Issue in get_last'
+        assert len(elem) != 0 or not blocking, 'Issue in get_last'
         while len(elem) > 0:
             cpy += elem
             elem = get_from_queue(self.__obj_buffer, blocking=False)
