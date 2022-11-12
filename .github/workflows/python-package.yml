@@ -29,7 +29,7 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest pytest-timeout
         python -m pip install -e .
-        python -m tlspyo --credentials
+        python -m tlspyo --generate
     - name: Test with pytest
       run: |
         pytest --timeout=10

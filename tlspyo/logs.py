@@ -1,7 +1,7 @@
 import logging
 
 DEFAULT_FORMAT_STR = "%(levelname)s:%(asctime)s:%(message)s"
-DEFAULT_LEVEL = logging.WARNING
+DEFAULT_LEVEL = logging.getLogger().getEffectiveLevel()
 
 logger = logging.getLogger('tlspyo')
 console_handler = logging.StreamHandler()

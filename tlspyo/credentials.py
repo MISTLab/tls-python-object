@@ -1,10 +1,18 @@
 from pathlib import Path
 import datetime
+import socket
 
+from platformdirs import user_data_dir
 from OpenSSL import crypto
 
 
-DEFAULT_KEYS_FOLDER = Path.home() / "tlspyo" / "credentials"
+DEFAULT_KEYS_FOLDER = Path(user_data_dir()) / "tlspyo" / "credentials"
+
+
+def get_default_keys_folder():
+    if not DEFAULT_KEYS_FOLDER.exists():
+        DEFAULT_KEYS_FOLDER.mkdir(parents=True, exist_ok=True)
+    return DEFAULT_KEYS_FOLDER
 
 
 def generate_tls_credentials(
@@ -60,7 +68,7 @@ def generate_tls_credentials(
 
 def credentials_generator_tool(custom=False):
 
-    folder_path = DEFAULT_KEYS_FOLDER
+    folder_path = get_default_keys_folder()
     email_address = "emailAddress"
     common_name = "default"
     country_name = "CA"
@@ -148,3 +156,44 @@ def credentials_generator_tool(custom=False):
                              validity_end_in_seconds=validity_end_in_seconds)
 
     print(f"Credentials successfully generated in {folder_path}")
+
+
+def tcp_broadcast_tls_credentials(port, directory=None):
+    folder = get_default_keys_folder() if directory is None else directory
+    cert_path = folder / 'certificate.pem'
+    if not cert_path.exists():
+        print(f"certificate.pem file not found in {folder}, please generate it first.")
+        print("You can generate a certificate.pem in the default tlspyo directory with the following command:")
+        print("python -m tlspyo --generate")
+        return
+    else:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as com_srv:
+            com_srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            com_srv.bind(('', port))
+            com_srv.listen()
+            print("Starting credentials server, close the terminal to exit.")
+            while True:
+                try:
+                    conn, addr = com_srv.accept()
+                    with conn:
+                        with open(cert_path, 'rb') as f:
+                            conn.sendfile(f)
+                        print(f"Sent TLS certificate to {addr} via port {port}.")
+                    print(f"Connection closed.")
+                except KeyboardInterrupt:
+                    break
+
+
+def tcp_retrieve_tls_credentials(ip, port, directory=None):
+    folder = get_default_keys_folder() if directory is None else directory
+    cert_path = folder / 'certificate.pem'
+    print(f"Attempting to reach credentials server at address {ip}:{port}")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((ip, port))
+        while True:
+            data = s.recv(1024)
+            if not data:
+                break
+    with open(cert_path, 'wb') as f:
+        f.write(data)
+    print(f"TLS certificate correctly received in {cert_path}")

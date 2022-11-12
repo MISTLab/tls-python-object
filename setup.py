@@ -8,19 +8,14 @@ if sys.version_info < (3, 7):
     sys.exit('Sorry, Python < 3.7 is not supported, upgrade your python installation to use tlspyo.')
 
 
-DEFAULT_KEYS_FOLDER = Path.home() / "tlspyo" / "credentials"
-if not DEFAULT_KEYS_FOLDER.exists():
-    DEFAULT_KEYS_FOLDER.mkdir(parents=True, exist_ok=True)
-
-
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
 setup(name='tlspyo',
       packages=[package for package in find_packages()],
-      version='0.1.1',
-      download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.1.1.tar.gz',
+      version='0.2.0',
+      download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.2.0.tar.gz',
       license='MIT',
       description='Secure transport of python objects using TLS encryption',
       long_description=long_description,
@@ -31,7 +26,8 @@ setup(name='tlspyo',
       install_requires=[
         'twisted',
         'pyOpenSSL',
-        'service_identity'
+        'service_identity',
+        'platformdirs'
         ],
       extras_requires={
         "dev": ['pytest', 'pytest-timeout']

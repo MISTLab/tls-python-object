@@ -1,4 +1,3 @@
-import time
 from tlspyo import Relay, Endpoint
 
 if __name__ == "__main__":

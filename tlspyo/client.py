@@ -8,7 +8,7 @@ from twisted.internet import ssl
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 
 from tlspyo.local_protocol_for_client import LocalProtocolForClientFactory
-from tlspyo.credentials import DEFAULT_KEYS_FOLDER
+from tlspyo.credentials import get_default_keys_folder
 from tlspyo.logs import logger
 
 
@@ -159,7 +159,7 @@ class Client:
             reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
         elif self._connection == "TLS":
             # Use default keys if none are provided
-            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS_FOLDER, 'certificate.pem')
+            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(get_default_keys_folder(), 'certificate.pem')
             # Authenticates the server to all potential clients for TLS communication
             try:
                 certData = FilePath(self_signed).getContent()

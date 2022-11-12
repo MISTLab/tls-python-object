@@ -8,7 +8,7 @@ from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import ssl
 
 from tlspyo.local_protocol_for_server import LocalProtocolForServerFactory
-from tlspyo.credentials import DEFAULT_KEYS_FOLDER
+from tlspyo.credentials import get_default_keys_folder
 from tlspyo.logs import logger
 
 
@@ -55,7 +55,7 @@ class ServerProtocol(Protocol):
             i = self._header_size + self._len_password
             if len(self._buffer) >= i:
                 i, j, psw = self.process_header()
-                if self._state == "KILLED":
+                if self._state == "KILLED":  # invalid password
                     return
                 while len(self._buffer) >= j:
                     stamp, cmd, dest, obj = pkl.loads(self._buffer[i:j])
@@ -82,7 +82,7 @@ class ServerProtocol(Protocol):
                                 self.transport.loseConnection()
                         elif self._state == "ALIVE":
                             if cmd == "OBJ":
-                                logger.debug(f"Received object {pkl.loads(obj)} from client {self._identifier} for groups {dest}.")
+                                logger.debug(f"Received object from client {self._identifier} for groups {dest}.")
                                 self.forward_obj_to_dest(obj=obj, dest=dest)
                             elif cmd == "NTF":
                                 logger.debug(f"Received notification from client {self._identifier} for destination {dest}.")
@@ -177,11 +177,11 @@ class ServerProtocol(Protocol):
                         d_g['to_broadcast'] = obj
                         ids = d_g['ids']
                         for id_cli in ids:
-                            logger.debug(f"Sending object {pkl.loads(obj)} from group {group} to identifier {id_cli}.")
+                            logger.debug(f"Sending object from group {group} to identifier {id_cli}.")
                             self._server.to_clients[id_cli].send_obj(cmd='OBJ', obj=obj)
                     elif value > 0:
                         # add object to group's consumables
-                        logger.debug(f"Adding {value} copies of the consumable {pkl.loads(obj)} to group {group}.")
+                        logger.debug(f"Adding {value} copies of the consumable to group {group}.")
                         for _ in range(value):
                             d_g['to_consume'].append(obj)
                         self.dispatch_pending_consumables(group)
@@ -246,8 +246,8 @@ class Server:
             reactor.listenTCP(self._port, factory)
         elif self._connection == "TLS":
             # Use default keys if none are provided
-            private_key = os.path.join(self._keys_dir, 'key.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS_FOLDER, 'key.pem')
-            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(DEFAULT_KEYS_FOLDER, 'certificate.pem')
+            private_key = os.path.join(self._keys_dir, 'key.pem') if self._keys_dir is not None else os.path.join(get_default_keys_folder(), 'key.pem')
+            self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(get_default_keys_folder(), 'certificate.pem')
             # Authenticates the server to all potential clients for TLS communication
             try:
                 context = ssl.DefaultOpenSSLContextFactory(private_key, self_signed)

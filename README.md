@@ -28,34 +28,143 @@
 
 By default, `tlspyo` relies on Transport Layer Security (TLS) to secure object transfers over network.
 
+## Example usage
 
-## Getting Started
+```python
+from tlspyo import Relay, Endpoint
+
+if __name__ == "__main__":
+
+    # Create a relay to allow connectivity between endpoints
+
+    re = Relay(
+        port=3000,  # this must be the same on your Relay and Endpoints
+        password="VerySecurePassword",  # this must be the same on Relay and Endpoints, AND be strong
+        local_com_port=3001  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
+    )
+
+    # Create an Endpoint in group "producers" (arbitrary name)
+
+    prod = Endpoint(
+        ip_server='127.0.0.1',  # IP of the Relay (here: localhost)
+        port=3000,  # must be same port as the Relay
+        password="VerySecurePassword",  # must be same (strong) password as the Relay
+        groups="producers",  # this endpoint is part of the group "producers"
+        local_com_port=3002  # must be unique
+    )
+
+    # Create a bunch of other Endpoints in group "consumers" (arbitrary name)
+
+    cons_1 = Endpoint(
+        ip_server='127.0.0.1',
+        port=3000,
+        password="VerySecurePassword",
+        groups="consumers",  # this endpoint is part of group "consumers"
+        local_com_port=3003  # must be unique
+    )
+
+    cons_2 = Endpoint(
+        ip_server='127.0.0.1',
+        port=3000,
+        password="VerySecurePassword",
+        groups="consumers",  # this endpoint is part of group "consumers"
+        local_com_port=3004,  # must be unique
+    )
+
+    # Producer broadcasts an object to any and all endpoint in the destination group "consumers"
+    prod.broadcast("I HAVE BEEN BROADCAST", "consumers")
+
+    # Producer sends an object to the shared queue of destination group "consumers"
+    prod.produce("I HAVE BEEN PRODUCED", "consumers")
+
+    # Consumer 1 notifies the Relay that it wants one produced object destined for "consumers"
+    cons_1.notify("consumers")
+
+    # Consumer 1 is able to retrieve the broadcast AND the consumed object:
+    res = []
+    while len(res) < 2:
+        res = cons_1.receive_all(blocking=True)
+    print(f"Consumer 1 has received: {res}") # Print the first (and only) result from the local queue
+
+    # Consumer 2 is able to retrieve only the broadcast object:
+    res = cons_2.receive_all(blocking=True)
+    print(f"Consumer 2 has received: {res}")  # Print the first (and only) result from the local queue
+
+    # Let us close everyone gracefully:
+    prod.stop()
+    cons_1.stop()
+    cons_2.stop()
+    re.stop()
+```
+
+## Getting started
+
+:information_source: _The machine hosting your `Relay` must be visible to the machines hosting your `Endpoints` through port `<port>`, via its public IP `<ip>`.
+When using `tlspyo` over the Internet, this typically requires you to configure your router such that it forwards port `<port>` to the IP of the machine hosting your `Relay` on your local network._
+
 
 ### Installation
 From PyPI:
 ```bash
 pip install tlspyo
 ```
-:information_source: _In case pip throws a permission error, manually create the `tlspyo/credentials` directory in your home directory and try again._
 
 ### TLS setup:
 
-`tlspyo` makes the process of generating your TLS credentials (a private key and a public certificate) straightforward.
+:information_source: _You can skip this section if you do not want to use TLS.
+For instance if you use `tlspyo` on your own private secure network.
+When using `tlspyo` over the Internet, you should of course use TLS (read the [security](#security) section if you do not understand why)._
 
-When you installed `tlspyo`, pip has generated a `tlspyo` folder in your home directory, containing a `credentials` subfolder.
-This subfolder is where credentials will be stored by default.
+- **Generate TLS credentials:**
+
+`tlspyo` makes the process of generating your TLS credentials straightforward.
 
 :arrow_forward: On the machine that will host your `Relay`, execute the following command line:
 ```bash
+python -m tlspyo --generate
+```
+This will generate two files in the `tlspyo/credentials` data directory: `key.pem` and `certificate.pem`.
+
+:information_source: _In case you wish to customize your TLS certificate, add the `--custom` option in the previous command line._
+
+Now, your need to retrieve your `certificate.pem` on the machines that will host your `Endpoints`
+_(note: you can skip the following steps if your `Endpoints` are on the same machine as your `Relay`)._
+
+This can be achieved via either of the following methods:
+
+- **METHOD 1: manually copy the public certificate (more secure):**
+
+:arrow_forward: On the machines that will host your `Endpoints`, execute:
+```bash
 python -m tlspyo --credentials
- ```
-This will generate two files in the `tlspyo/credentials` folder: `key.pem` and `certificate.pem`.
+```
+This creates and displays the target folder where you need to copy the `certificate.pem` that you generated on the machine that will host the `Relay` (the source folder was displayed when you executed `--generate`).
 
-:arrow_forward: Copy `certificate.pem` into the `tlspyo/credentials` folder of the machines that will host your `Endpoints` _(note: you only need this step in case your `Endpoints` are not on the same machine as your `Relay`)._
+- **METHOD 2: transfer the public certificate via TCP (not secure):**
 
-You are all set! :sunglasses:
+:warning: _This method is not secure.
+In particular, a man-in-the-middle can impersonate the certificate-broadcasting server and send you a fraudulent TLS certificate.
+Use with caution._
 
-:information_source: _In case you wish to customize your TLS certificate, add the `--custom` option to the command line._
+:arrow_forward: On the machine that will host your `Relay`, start a certificate-broadcasting server:
+```bash
+python -m tlspyo --broadcast --port=<port>
+```
+where `<port>` is a port though which other machines will attempt to retrieve your certificate via TCP.
+
+:arrow_forward: On the machines that will host your `Endpoints`, execute:
+```bash
+python -m tlspyo --retrieve --ip=<ip> --port=<port>
+```
+where `<ip>` is the public IP of the certificate-broadcasting machine, and `<port>` is the same as previously.
+
+And you are all set! :sunglasses:
+
+_You can now stop the certificate-broadcasting server by closing the terminal where it runs._
+
+
+
+
 
 
 ### A Simple Producer-Consumer Example
@@ -84,7 +193,8 @@ Creating a `Relay` is straightforward:
 re = Relay(
     port=3000,  # this must be the same on your Relay and Endpoints
     password="VerySecurePassword",  # this must be the same on Relay and Endpoints, AND be strong
-    local_com_port=3001  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
+    local_com_port=3001,  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
+    connection="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
 )
 ```
 As soon as your `Relay` is created, it is up and running.
@@ -105,7 +215,8 @@ prod = Endpoint(
     port=3000, # must be same port as the Relay
     password="VerySecurePassword", # must be same (strong) password as the Relay
     groups="producers",  # this endpoint is part of the group "producers"
-    local_com_port=3002  # must be unique
+    local_com_port=3002,  # must be unique
+    connection="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
 )
 
 # Initialize  consumer endpoints
@@ -115,7 +226,8 @@ cons_1 = Endpoint(
     port=3000,
     password="VerySecurePassword",
     groups="consumers",  # this endpoint is part of group "consumers"
-    local_com_port=3003  # must be unique
+    local_com_port=3003,  # must be unique
+    connection="TLS"
 ) 
 
 cons_2 = Endpoint(
@@ -124,6 +236,7 @@ cons_2 = Endpoint(
     password="VerySecurePassword",
     groups="consumers",  # this endpoint is part of group "consumers"
     local_com_port=3004,  # must be unique
+    connection="TLS"
 ) 
 ```
  A nice thing about `tlspyo` is that all communication is handled behind the scenes.
@@ -216,7 +329,7 @@ To prevent this from happening, `tlspyo` provides two interdependent layers of s
 * `Endpoints` authenticate your `Relay` via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), which must use [your own secret key and public certificate](#tls-setup).
 This ensures your `Endpoints` are indeed talking to your `Relay` and not to some [man-in-the-middle](https://en.wikipedia.org/wiki/Man-in-the-middle_attack), **provided you keep your secret key secure**.
 This also prevents anyone else from [eavesdropping](https://en.wikipedia.org/wiki/Eavesdropping) thanks to TLS encryption.
-* Every object transfer is protected by a password known to both the `Relay` and the `Endpoints` (`password` argument).
+* Every object transfer is protected by a password known to both the `Relay` and the `Endpoints` (the `password` argument).
 No object is deserialized without verification of the password.
 This ensures that anyone posing as an endpoint will never be able to send undesired objects through your relay **unless they know your password**.
 
