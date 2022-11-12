@@ -39,7 +39,13 @@ class ServerProtocol(Protocol):
         i = self._header_size + self._len_password
         if len(self._buffer) < i:
             return 0, len(self._buffer) + 1, None
-        data_len = int(self._buffer[:self._header_size])
+        try:
+            data_len = int(self._buffer[:self._header_size])
+        except ValueError:
+            logger.info(f"Invalid request.")
+            self._state = "KILLED"
+            self.transport.abortConnection()
+            return 0, len(self._buffer) + 1, None
         j = i + data_len
         psw = self._buffer[self._header_size:i]
         psw = psw.decode('utf8')
@@ -55,7 +61,7 @@ class ServerProtocol(Protocol):
             i = self._header_size + self._len_password
             if len(self._buffer) >= i:
                 i, j, psw = self.process_header()
-                if self._state == "KILLED":  # invalid password
+                if self._state == "KILLED":  # invalid password or request
                     return
                 while len(self._buffer) >= j:
                     stamp, cmd, dest, obj = pkl.loads(self._buffer[i:j])
@@ -97,7 +103,7 @@ class ServerProtocol(Protocol):
                     if self._state == "KILLED":
                         return
         except Exception as e:
-            logger.warning(f"Unhandled exception: {e}")
+            logger.warning(f"Killing connection because of unhandled exception: {e}")
             self._state = "KILLED"
             self.transport.abortConnection()
             raise e
