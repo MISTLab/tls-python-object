@@ -53,8 +53,8 @@ if __name__ == "__main__":
 
     re = Relay(
         port=3000,  # this must be the same on your Relay and Endpoints
-        password="VerySecurePassword",  # this must be the same on Relay and Endpoints, AND be strong
-        local_com_port=3001  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
+        password="VerySecurePassword",  # must be the same on Relay and Endpoints, AND be strong
+        local_com_port=3001  # needs to be non-overlapping if Relays/Endpoints are on the same machine
     )
 
     # Create an Endpoint in group "producers" (arbitrary name)
