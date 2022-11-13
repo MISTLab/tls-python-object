@@ -12,6 +12,8 @@ from tlspyo.utils import get_from_queue
 
 
 DEFAULT_CONNECTION = "TLS"
+DEFAULT_SERIALIZER = pkl.dumps
+DEFAULT_DESERIALIZER = pkl.loads
 
 
 class Relay:
@@ -22,7 +24,9 @@ class Relay:
                  local_com_port: int = 2096,
                  header_size: int = 10,
                  connection: str = DEFAULT_CONNECTION,
-                 keys_dir: str = None):
+                 keys_dir: str = None,
+                 serializer=None,
+                 deserializer=None):
         """
         `tlspyo` Relay.
 
@@ -34,14 +38,16 @@ class Relay:
 
         :param port: int: port of the Relay
         :param password: password of the Relay
-        :param accepted_groups: object (default: None): groups accepted by the Relay.
-            If None, the Relay accepts any group.
+        :param accepted_groups: object (default: None): groups accepted by the Relay
+            If None, the Relay accepts any group;
             Else, must be a dictionary where keys are groups and values are dictionaries with the following entries:
-                - 'max_count': max number of connected clients in the group (None for unlimited).
-                - 'max_consumables': max number of pending consumables in the group (None for unlimited).
+                - 'max_count': max number of connected clients in the group (None for unlimited)
+                - 'max_consumables': max number of pending consumables in the group (None for unlimited)
         :param local_com_port: int: local port used for internal communication with Twisted.
-        :param header_size: int: bytes to read at once from socket buffers (the default should work for most cases).
+        :param header_size: int: bytes to read at once from socket buffers (the default should work for most cases)
         :param connection: str: one of ("TCP", "TLS")
+        :param serializer: callable: custom serializer that outputs a bytestring from a python object
+        :param serializer: callable: custom deserializer that outputs a python object from a bytestring
         """
 
         if connection == "SSL":
@@ -57,9 +63,15 @@ class Relay:
         self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self._local_com_srv.bind(('127.0.0.1', self._local_com_port))
         self._local_com_srv.listen()
+
         keys_dir = os.path.abspath(keys_dir) if keys_dir is not None else keys_dir
+        serializer = serializer if serializer is not None else DEFAULT_SERIALIZER
+        deserializer = deserializer if deserializer is not None else DEFAULT_DESERIALIZER
+
         self._server = Server(port=port,
                               password=password,
+                              serializer=serializer,
+                              deserializer=deserializer,
                               accepted_groups=accepted_groups,
                               local_com_port=local_com_port,
                               header_size=header_size,
@@ -74,7 +86,7 @@ class Relay:
         self.stop()
 
     def _send_local(self, cmd):
-        msg = pkl.dumps((cmd, None))
+        msg = self._server.serializer((cmd, None))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self._local_com_conn.sendall(msg)
 
@@ -100,7 +112,9 @@ class Endpoint:
                  max_buf_len: int = 4096,
                  connection: str = DEFAULT_CONNECTION,
                  keys_dir: str = None,
-                 hostname: str = "default"):
+                 hostname: str = "default",
+                 serializer=None,
+                 deserializer=None):
         """
         tlspyo Endpoint.
 
@@ -118,6 +132,8 @@ class Endpoint:
         :param header_size: int: number of bytes used for the header (the default should be OK for most cases)
         :param max_buf_len: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
         :param connection: str: one of ("TCP", "TLS")
+        :param serializer: callable: custom serializer that outputs a bytestring from a python object
+        :param serializer: callable: custom deserializer that outputs a python object from a bytestring
         """
 
         if connection == "SSL":
@@ -139,11 +155,16 @@ class Endpoint:
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
         self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+
         keys_dir = os.path.abspath(keys_dir) if keys_dir is not None else keys_dir
+        serializer = serializer if serializer is not None else DEFAULT_SERIALIZER
+        deserializer = deserializer if deserializer is not None else DEFAULT_DESERIALIZER
 
         self._client = Client(ip_server=ip_server,
                               port_server=port,
                               password=password,
+                              serializer=serializer,
+                              deserializer=deserializer,
                               groups=groups,
                               local_com_port=local_com_port,
                               header_size=header_size,
@@ -180,9 +201,9 @@ class Endpoint:
             buf += self._local_com_conn.recv(self._max_buf_len)
             i, j = self._process_header(buf)
             while j <= len(buf):
-                stamp, cmd, obj = pkl.loads(buf[i:j])
+                stamp, cmd, obj = self._client.deserializer(buf[i:j])
                 if cmd == "OBJ":
-                    self.__obj_buffer.put(pkl.loads(obj))  # TODO: maxlen
+                    self.__obj_buffer.put(self._client.deserializer(obj))  # TODO: maxlen
                 buf = buf[j:]
                 i, j = self._process_header(buf)
 
@@ -195,7 +216,7 @@ class Endpoint:
         return i, j
 
     def _send_local(self, cmd, dest=None, obj=None):
-        msg = pkl.dumps((cmd, dest, pkl.dumps(obj)))
+        msg = self._client.serializer((cmd, dest, self._client.serializer(obj)))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self._local_com_conn.sendall(msg)
 

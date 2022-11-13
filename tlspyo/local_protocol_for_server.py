@@ -1,5 +1,3 @@
-import pickle as pkl
-
 from twisted.internet.protocol import Protocol, ClientFactory
 
 from tlspyo.logs import logger
@@ -32,7 +30,7 @@ class LocalProtocolForServer(Protocol):
             if len(self._buffer) >= i:
                 i, j = self.process_header()
                 while len(self._buffer) >= j:
-                    cmd, _ = pkl.loads(self._buffer[i:j])
+                    cmd, _ = self._server.deserializer(self._buffer[i:j])
                     if cmd == "STOP":
                         self.transport.loseConnection()
                         self._server.close(1)

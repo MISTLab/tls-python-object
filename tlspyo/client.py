@@ -1,4 +1,3 @@
-import pickle as pkl
 import time
 import os
 
@@ -13,7 +12,12 @@ from tlspyo.logs import logger
 
 
 class ClientProtocol(Protocol):
-    def __init__(self, client, password, header_size=10, groups=("default", )):
+    def __init__(self,
+                 client,
+                 password,
+                 header_size=10,
+                 groups=("default", )):
+
         self._password = password
         self._header_size = header_size
         self._buffer = b""
@@ -42,7 +46,7 @@ class ClientProtocol(Protocol):
         if len(self._buffer) >= self._header_size:
             i, j = self.process_header()
             while len(self._buffer) >= j:
-                stamp, cmd, obj = pkl.loads(self._buffer[i:j])
+                stamp, cmd, obj = self._client.deserializer(self._buffer[i:j])
                 if cmd == 'ACK':
                     try:
                         logger.info(f"ACK received after {time.monotonic() - self._client.pending_acks[stamp][0]}s.")
@@ -75,13 +79,13 @@ class ClientProtocol(Protocol):
 
     def send_obj(self, cmd='OBJ', dest=None, obj=None):
         self._client.ack_stamp += 1
-        msg = pkl.dumps((self._client.ack_stamp, cmd, dest, obj))
+        msg = self._client.serializer((self._client.ack_stamp, cmd, dest, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self._client.pending_acks[self._client.ack_stamp] = (time.monotonic(), msg)
         self.transport.write(msg)
 
     def send_ack(self, stamp):
-        msg = pkl.dumps((stamp, 'ACK', None, None))
+        msg = self._client.serializer((stamp, 'ACK', None, None))
         msg = bytes(f"{len(msg):<{self._header_size}}{self._password}", 'utf-8') + msg
         self.transport.write(msg)
 
@@ -104,7 +108,10 @@ class TLSClientFactory(ReconnectingClientFactory):
     def buildProtocol(self, addr):
         logger.info('Connected.')
         self.resetDelay()
-        return ClientProtocol(client=self._client, password=self.password, groups=self._groups, header_size=self._header_size)
+        return ClientProtocol(client=self._client,
+                              password=self.password,
+                              groups=self._groups,
+                              header_size=self._header_size)
 
     def clientConnectionLost(self, connector, reason):
         logger.info(f'Lost connection.  Reason: {reason.getErrorMessage()}')
@@ -120,12 +127,18 @@ class Client:
                  ip_server,
                  port_server,
                  password,
+                 serializer,
+                 deserializer,
                  header_size=10,
                  groups=None,
                  local_com_port=2097,
                  connection="TLS",
                  keys_dir=None,
                  hostname='default'):
+
+        self.serializer = serializer
+        self.deserializer = deserializer
+
         self.groups = groups
         self._ip_server = ip_server
         self._port_server = port_server

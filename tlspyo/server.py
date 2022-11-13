@@ -1,5 +1,4 @@
 import os
-import pickle as pkl
 import time
 from collections import deque
 
@@ -64,7 +63,7 @@ class ServerProtocol(Protocol):
                 if self._state == "KILLED":  # invalid password or request
                     return
                 while len(self._buffer) >= j:
-                    stamp, cmd, dest, obj = pkl.loads(self._buffer[i:j])
+                    stamp, cmd, dest, obj = self._server.deserializer(self._buffer[i:j])
                     if cmd == 'ACK':
                         try:
                             del self._server.pending_acks[stamp]  # delete pending ACK
@@ -110,13 +109,13 @@ class ServerProtocol(Protocol):
 
     def send_obj(self, cmd='OBJ', obj=None):
         self._server.ack_stamp += 1
-        msg = pkl.dumps((self._server.ack_stamp, cmd, obj))
+        msg = self._server.serializer((self._server.ack_stamp, cmd, obj))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self._server.pending_acks[self._server.ack_stamp] = (time.monotonic(), msg)
         self.transport.write(msg)
 
     def send_ack(self, stamp):
-        msg = pkl.dumps((stamp, 'ACK', None))
+        msg = self._server.serializer((stamp, 'ACK', None))
         msg = bytes(f"{len(msg):<{self._header_size}}", 'utf-8') + msg
         self.transport.write(msg)
 
@@ -212,11 +211,17 @@ class Server:
     def __init__(self,
                  port,
                  password,
+                 serializer,
+                 deserializer,
                  accepted_groups=None,
                  header_size=10,
                  local_com_port=2097,
                  connection="TLS",
                  keys_dir=None):
+
+        self.serializer = serializer
+        self.deserializer = deserializer
+
         self._port = port
         self._local_com_port = local_com_port
         assert self._local_com_port != self._port, f"Internet and local ports are the same ({self._port})."
