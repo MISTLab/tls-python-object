@@ -13,6 +13,18 @@
 :information_source: _Please carefully read the [Security](#security) section before using `tlspyo` anywhere other than your own secure private network._
 
 
+## Quick links
+
+- [Principle](#principle)
+- [Example usage](#example-usage)
+- [Getting started](#getting-started)
+  - [Installation](#installation)
+  - [TLS setup](#tls-setup)
+  - [Producer-consumer example](#a-simple-producer-consumer-example)
+- [Security](#security)
+- [Custom serialization](#custom-serialization)
+
+
 ## Principle
 
 `tlspyo` provides two classes: `Relay` and  `Endpoint`.
@@ -337,6 +349,73 @@ If a malicious user successfully posed as your `Relay`, your `Endpoint` would se
 If they successfully posed as your `Endpoint` they could send malicious pickled objects to your `Relay` (this is prevented by them not knowing your password).
 
 In a nutshell, you want your password to be as strong as possible, and your TLS secret key to be kept... well, secret :lock:
+
+## Custom serialization
+
+By default, `tlspyo` uses `pickle` for serialization and relies on TLS to prevent attacks.
+
+In advanced application, you may want to use another serialization protocol instead.
+For instance, you may want to transfer non-picklable objects, or further optimize the security of your application.
+
+**In particular, in `connection="TCP"` mode (i.e., with TLS disabled) over a public network, using your own secure serialization protocol is critical.**
+
+`tlspyo` makes this easy.
+All you need to do is code your own serialization protocol following the `pickle.dumps`/`pickle.loads` signature, and pass it to the `serializer`/`deserializer` arguments of both your `Relay` and `Endpoints`.
+
+For instance:
+```python
+import pickle as pkl
+from tlspyo import Relay, Endpoint
+
+# We define a custom serialization protocol based on pickle for simplicity.
+# Of course, this is only for illustration.
+# You probably do not want to use pickle in practice here.
+
+
+def my_custom_serializer(obj):
+    """
+    Takes a python object as input and outputs a bytestring
+    """
+    return b"header" + pkl.dumps(["TEST", pkl.dumps(obj)])
+
+
+def my_custom_deserializer(bytestring):
+    """
+    Takes a bytestring as input and outputs a python object
+    """
+    assert len(bytestring) > len(b"header")
+    assert bytestring[:len(b"header")] == b"header"
+    bytestring = bytestring[len(b"header"):]
+    tmp = pkl.loads(bytestring)
+    assert isinstance(tmp, list)
+    assert len(tmp) == 2
+    assert tmp[0] == "TEST"
+    obj = pkl.loads(tmp[1])
+    return obj
+
+
+if __name__ == '__main__':
+
+    re = Relay(
+        port=3000,
+        password="VerySecurePassword",
+        local_com_port=3001,
+        connection="TLS",
+        serializer=my_custom_serializer,
+        deserializer=my_custom_deserializer
+    )
+
+    ep = Endpoint(
+        ip_server='127.0.0.1',
+        port=3000,
+        password="VerySecurePassword",
+        groups="group1",
+        local_com_port=3002,
+        connection="TLS",
+        serializer=my_custom_serializer,
+        deserializer=my_custom_deserializer
+)
+```
 
 ## External links
 

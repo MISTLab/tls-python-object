@@ -15,10 +15,13 @@ def same_lists_no_order(l1, l2):
 
 
 def custom_serializer(obj):
-    return pkl.dumps(["TEST", pkl.dumps(obj)])
+    return b"header" + pkl.dumps(["TEST", pkl.dumps(obj)])
 
 
 def custom_deserializer(bytestring):
+    assert len(bytestring) > len(b"header")
+    assert bytestring[:len(b"header")] == b"header"
+    bytestring = bytestring[len(b"header"):]
     tmp = pkl.loads(bytestring)
     assert isinstance(tmp, list)
     assert len(tmp) == 2
