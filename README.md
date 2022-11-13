@@ -1,6 +1,8 @@
 # tls-python-object (tlspyo)
 
-:computer: :globe_with_meridians: :computer: **A library for secure transfer of python objects over network.**
+:computer: :globe_with_meridians: :computer:
+
+**A library for secure transfer of python objects over network.**
 
 [![Python package](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml/badge.svg)](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml)
 
