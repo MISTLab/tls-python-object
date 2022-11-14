@@ -132,7 +132,7 @@ class Client:
                  header_size=10,
                  groups=None,
                  local_com_port=2097,
-                 connection="TLS",
+                 security="TLS",
                  keys_dir=None,
                  hostname='default'):
 
@@ -151,7 +151,7 @@ class Client:
         self.store = []
         self.ack_stamp = 0
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
-        self._connection = connection
+        self._security = security
         self._keys_dir = keys_dir
         self._hostname = hostname
 
@@ -168,9 +168,9 @@ class Client:
         reactor.connectTCP(host='127.0.0.1', port=self._local_com_port, factory=LocalProtocolForClientFactory(self))
 
         # Initialize the Internet connection
-        if self._connection == "TCP":
+        if self._security == "TCP":
             reactor.connectTCP(host=self._ip_server, port=self._port_server, factory=TLSClientFactory(client=self))
-        elif self._connection == "TLS":
+        elif self._security == "TLS":
             # Use default keys if none are provided
             self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(get_default_keys_folder(), 'certificate.pem')
             # Authenticates the server to all potential clients for TLS communication
@@ -188,7 +188,7 @@ class Client:
                 contextFactory=ssl.optionsForClientTLS(hostname=self._hostname, trustRoot=authority)
             )
         else:
-            logger.warning(f"Unsupported connection: {self._connection}")
+            logger.warning(f"Unsupported connection: {self._security}")
         
         # Start the reactor
         self._reactor = reactor

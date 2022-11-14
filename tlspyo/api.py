@@ -11,7 +11,7 @@ from tlspyo.client import Client
 from tlspyo.utils import get_from_queue
 
 
-DEFAULT_CONNECTION = "TLS"
+DEFAULT_SECURITY = "TLS"
 DEFAULT_SERIALIZER = pkl.dumps
 DEFAULT_DESERIALIZER = pkl.loads
 
@@ -23,7 +23,7 @@ class Relay:
                  accepted_groups=None,
                  local_com_port: int = 2096,
                  header_size: int = 10,
-                 connection: str = DEFAULT_CONNECTION,
+                 security: str = DEFAULT_SECURITY,
                  keys_dir: str = None,
                  serializer=None,
                  deserializer=None):
@@ -45,14 +45,18 @@ class Relay:
                 - 'max_consumables': max number of pending consumables in the group (None for unlimited)
         :param local_com_port: int: local port used for internal communication with Twisted.
         :param header_size: int: bytes to read at once from socket buffers (the default should work for most cases)
-        :param connection: str: one of ("TCP", "TLS")
+        :param security: str: one of (None, "TLS");
+            None disables TLS, do not use None on a public network unless you know what you are doing!
         :param serializer: callable: custom serializer that outputs a bytestring from a python object
         :param serializer: callable: custom deserializer that outputs a python object from a bytestring
         """
 
-        if connection == "SSL":
-            connection = "TLS"
-        assert connection in ("TCP", "TLS"), f"Unsupported connection: {connection}"
+        assert security in (None, "TLS"), f"Unsupported security: {security}"
+
+        if security is None:
+            security = "TCP"
+        elif security == "SSL":
+            security = "TLS"
 
         assert accepted_groups is None or isinstance(accepted_groups, dict), "Invalid format for accepted_groups."
 
@@ -75,7 +79,7 @@ class Relay:
                               accepted_groups=accepted_groups,
                               local_com_port=local_com_port,
                               header_size=header_size,
-                              connection=connection,
+                              security=security,
                               keys_dir=keys_dir)
         self._p = Process(target=self._server.run, args=())
         self._p.start()
@@ -110,7 +114,7 @@ class Endpoint:
                  local_com_port: int = 2097,
                  header_size: int = 10,
                  max_buf_len: int = 4096,
-                 connection: str = DEFAULT_CONNECTION,
+                 security: str = DEFAULT_SECURITY,
                  keys_dir: str = None,
                  hostname: str = "default",
                  serializer=None,
@@ -131,14 +135,18 @@ class Endpoint:
         :param local_com_port: local port used for internal communication with Twisted
         :param header_size: int: number of bytes used for the header (the default should be OK for most cases)
         :param max_buf_len: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
-        :param connection: str: one of ("TCP", "TLS")
+        :param security: str: one of (None, "TLS");
+            None disables TLS, do not use None on a public network unless you know what you are doing!
         :param serializer: callable: custom serializer that outputs a bytestring from a python object
         :param serializer: callable: custom deserializer that outputs a python object from a bytestring
         """
 
-        if connection == "SSL":
-            connection = "TLS"
-        assert connection in ("TCP", "TLS"), f"Unsupported connection: {connection}"
+        assert security in (None, "TLS"), f"Unsupported security: {security}"
+
+        if security is None:
+            security = "TCP"
+        elif security == "SSL":
+            security = "TLS"
 
         self._stopped = False
 
@@ -168,7 +176,7 @@ class Endpoint:
                               groups=groups,
                               local_com_port=local_com_port,
                               header_size=header_size,
-                              connection=connection,
+                              security=security,
                               keys_dir=keys_dir,
                               hostname=hostname)
 

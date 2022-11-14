@@ -208,7 +208,7 @@ re = Relay(
     port=3000,  # this must be the same on your Relay and Endpoints
     password="VerySecurePassword",  # this must be the same on Relay and Endpoints, AND be strong
     local_com_port=3001,  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
-    connection="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
+    security="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
 )
 ```
 As soon as your `Relay` is created, it is up and running.
@@ -230,7 +230,7 @@ prod = Endpoint(
     password="VerySecurePassword", # must be same (strong) password as the Relay
     groups="producers",  # this endpoint is part of the group "producers"
     local_com_port=3002,  # must be unique
-    connection="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
+    security="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
 )
 
 # Initialize  consumer endpoints
@@ -241,7 +241,7 @@ cons_1 = Endpoint(
     password="VerySecurePassword",
     groups="consumers",  # this endpoint is part of group "consumers"
     local_com_port=3003,  # must be unique
-    connection="TLS"
+    security="TLS"
 ) 
 
 cons_2 = Endpoint(
@@ -250,7 +250,7 @@ cons_2 = Endpoint(
     password="VerySecurePassword",
     groups="consumers",  # this endpoint is part of group "consumers"
     local_com_port=3004,  # must be unique
-    connection="TLS"
+    security="TLS"
 ) 
 ```
  A nice thing about `tlspyo` is that all communication is handled behind the scenes.
@@ -359,7 +359,7 @@ By default, `tlspyo` uses `pickle` for serialization and relies on TLS to preven
 In advanced application, you may want to use another serialization protocol instead.
 For instance, you may want to transfer non-picklable objects, or further optimize the security of your application.
 
-**In particular, in `connection="TCP"` mode (i.e., with TLS disabled) over a public network, using your own secure serialization protocol is critical.**
+**In particular, in `security="TCP"` mode (i.e., with TLS disabled) over a public network, using your own secure serialization protocol is critical.**
 
 `tlspyo` makes this easy.
 All you need to do is code your own serialization protocol following the `pickle.dumps`/`pickle.loads` signature, and pass it to the `serializer`/`deserializer` arguments of both your `Relay` and `Endpoints`.
@@ -402,7 +402,7 @@ if __name__ == '__main__':
         port=3000,
         password="VerySecurePassword",
         local_com_port=3001,
-        connection="TLS",
+        security="TLS",
         serializer=my_custom_serializer,
         deserializer=my_custom_deserializer
     )
@@ -413,7 +413,7 @@ if __name__ == '__main__':
         password="VerySecurePassword",
         groups="group1",
         local_com_port=3002,
-        connection="TLS",
+        security="TLS",
         serializer=my_custom_serializer,
         deserializer=my_custom_deserializer
 )

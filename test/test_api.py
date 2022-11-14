@@ -4,6 +4,7 @@ from utils import HelperTester
 
 NUM_OBJECTS = 10
 
+
 class TestAPI(unittest.TestCase):
 
     # Set up the server and all endpoints for all tests
@@ -38,7 +39,6 @@ class TestAPI(unittest.TestCase):
         # Checks for weird values for max_items
         self.assertRaises(AssertionError, lambda : cons.pop(max_items=-1, blocking=False))
         self.assertRaises(AssertionError, lambda : cons.pop(max_items=0, blocking=False))
-
 
     def test_produce_notify_broadcast(self):
         sr = self.ht.spawn_relay
@@ -99,7 +99,6 @@ class TestAPI(unittest.TestCase):
         self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", 42))
         self.assertRaises(AssertionError, lambda: prod1.send_object("TEST", {}))
 
-
     def test_read_with_receive(self):
         '''
         Checks receive all functionality with broadcast.
@@ -128,7 +127,6 @@ class TestAPI(unittest.TestCase):
         for i in range(NUM_OBJECTS):
             self.assertEqual(res[i], f"object {i}")
 
-
     def test_read_with_get_last(self):
         '''
         Checks get_last functionality with broadcast.
@@ -148,7 +146,6 @@ class TestAPI(unittest.TestCase):
 
         # Checks that we have received all objects in the right order
         self.assertEqual(res[-1], "object 9")
-        
 
     def tearDown(self):
         self.ht.clear()

@@ -216,7 +216,7 @@ class Server:
                  accepted_groups=None,
                  header_size=10,
                  local_com_port=2097,
-                 connection="TLS",
+                 security="TLS",
                  keys_dir=None):
 
         self.serializer = serializer
@@ -235,7 +235,7 @@ class Server:
         self.pending_acks = {}  # this contains copies of sent commands until corresponding ACKs are received
         self._reactor = None
         self._listener = None
-        self._connection = connection
+        self._security = security
         self._keys_dir = keys_dir
 
     def run(self):
@@ -252,10 +252,10 @@ class Server:
 
         # Start relay server
         factory = ServerProtocolFactory(self)
-        if self._connection == "TCP":
+        if self._security == "TCP":
             logger.info(f"Listening on TCP to port {self._port}")
             reactor.listenTCP(self._port, factory)
-        elif self._connection == "TLS":
+        elif self._security == "TLS":
             # Use default keys if none are provided
             private_key = os.path.join(self._keys_dir, 'key.pem') if self._keys_dir is not None else os.path.join(get_default_keys_folder(), 'key.pem')
             self_signed = os.path.join(self._keys_dir, 'certificate.pem') if self._keys_dir is not None else os.path.join(get_default_keys_folder(), 'certificate.pem')
@@ -269,7 +269,7 @@ class Server:
             logger.info(f"Listening on TLS to port {self._port}, with credentials {private_key} and {self_signed}")
             reactor.listenSSL(self._port, factory, context)
         else:
-            logger.warning(f"Unsupported connection: {self._connection}")
+            logger.warning(f"Unsupported connection: {self._security}")
             return
 
         self._reactor = reactor
