@@ -208,7 +208,7 @@ re = Relay(
     port=3000,  # this must be the same on your Relay and Endpoints
     password="VerySecurePassword",  # this must be the same on Relay and Endpoints, AND be strong
     local_com_port=3001,  # this needs to be non-overlapping if Relays/Endpoints live on the same machine
-    security="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
+    security="TLS"  # this is the default; replace by None if you do not want to use TLS
 )
 ```
 As soon as your `Relay` is created, it is up and running.
@@ -230,7 +230,7 @@ prod = Endpoint(
     password="VerySecurePassword", # must be same (strong) password as the Relay
     groups="producers",  # this endpoint is part of the group "producers"
     local_com_port=3002,  # must be unique
-    security="TLS"  # this is the default; replace by "TCP" if you do not want to use TLS
+    security="TLS"  # this is the default; replace by None if you do not want to use TLS
 )
 
 # Initialize  consumer endpoints
@@ -359,7 +359,7 @@ By default, `tlspyo` uses `pickle` for serialization and relies on TLS to preven
 In advanced application, you may want to use another serialization protocol instead.
 For instance, you may want to transfer non-picklable objects, or further optimize the security of your application.
 
-**In particular, in `security="TCP"` mode (i.e., with TLS disabled) over a public network, using your own secure serialization protocol is critical.**
+**In particular, in `security=None` mode (i.e., with TLS disabled) over a public network, using your own secure serialization protocol is critical.**
 
 `tlspyo` makes this easy.
 All you need to do is code your own serialization protocol following the `pickle.dumps`/`pickle.loads` signature, and pass it to the `serializer`/`deserializer` arguments of both your `Relay` and `Endpoints`.
