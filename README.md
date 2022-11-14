@@ -113,8 +113,8 @@ if __name__ == "__main__":
 
 ## Getting started
 
-:information_source: _The machine hosting your `Relay` must be visible to the machines hosting your `Endpoints` through port `<port>`, via its public IP `<ip>`.
-When using `tlspyo` over the Internet, this typically requires you to configure your router such that it forwards port `<port>` to the IP of the machine hosting your `Relay` on your local network._
+:information_source: _The machine hosting your `Relay` must be visible to the machines hosting your `Endpoints` through  the chosen `port`, via its public `ip_server`.
+When using `tlspyo` over the Internet, this typically requires you to configure your router such that it forwards `port` to the IP of the machine hosting your `Relay` on your local network._
 
 
 ### Installation
@@ -164,7 +164,7 @@ Use with caution._
 ```bash
 python -m tlspyo --broadcast --port=<port>
 ```
-where `<port>` is a port though which other machines will attempt to retrieve your certificate via TCP.
+where `<port>` is a port through which other machines will attempt to retrieve your certificate via TCP.
 
 :arrow_forward: On the machines that will host your `Endpoints`, execute:
 ```bash
