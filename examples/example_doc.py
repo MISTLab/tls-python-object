@@ -50,7 +50,7 @@ if __name__ == "__main__":
     # Consumer 1 is able to retrieve the broadcast AND the consumed object:
     res = []
     while len(res) < 2:
-        res = cons_1.receive_all(blocking=True)
+        res += cons_1.receive_all(blocking=True)
     print(f"Consumer 1 has received: {res}") # Print the first (and only) result from the local queue
 
     # Consumer 2 is able to retrieve only the broadcast object:
