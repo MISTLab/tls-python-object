@@ -6,10 +6,19 @@ from platformdirs import user_data_dir
 from OpenSSL import crypto
 
 
+__docformat__ = "google"
+
+
 DEFAULT_KEYS_FOLDER = Path(user_data_dir()) / "tlspyo" / "credentials"
 
 
 def get_default_keys_folder():
+    """
+    Creates the default credentials directory and returns it.
+
+    Returns:
+        pathlib.Path: default credentials directory
+    """
     if not DEFAULT_KEYS_FOLDER.exists():
         DEFAULT_KEYS_FOLDER.mkdir(parents=True, exist_ok=True)
     return DEFAULT_KEYS_FOLDER
@@ -29,16 +38,17 @@ def generate_tls_credentials(
     """
     Generates a private TLS key and a self-signed TLS certificate in the designed folder.
 
-    :param folder_path: path-like object: path were the files will be created
-    :param email_address: str: your email address
-    :param common_name: str: your hostname
-    :param country_name: str your country code
-    :param locality_name: str: your locality name
-    :param state_or_province_name: str: your state name
-    :param organization_name: str: your organization name
-    :param organization_unit_name: str: your organization unit name
-    :param serial_number: int: the serial number of your certificate
-    :param validity_end_in_seconds: int: seconds until the generated certificate will expire
+    Args:
+        folder_path (path-like object): path were the files will be created
+        email_address (str): your email address
+        common_name (str): your hostname
+        country_name (str): your country code
+        locality_name (str): your locality name
+        state_or_province_name (str): your state name
+        organization_name (str): your organization name
+        organization_unit_name (str): your organization unit name
+        serial_number (int): the serial number of your certificate
+        validity_end_in_seconds (int): seconds until the generated certificate will expire
     """
 
     key_file = Path(folder_path) / "key.pem"
@@ -67,6 +77,12 @@ def generate_tls_credentials(
 
 
 def credentials_generator_tool(custom=False):
+    """
+    Helper tool to generate credentials via CLI.
+
+    Args:
+        custom (bool): whether to customize the certificate
+    """
 
     folder_path = get_default_keys_folder()
     email_address = "emailAddress"
@@ -159,6 +175,13 @@ def credentials_generator_tool(custom=False):
 
 
 def tcp_broadcast_tls_credentials(port, directory=None):
+    """
+    Starts a server that broadcasts certificate.pem over TCP.
+
+    Args:
+        port: port
+        directory: directory where to find certificate.pem if not the default credential directory
+    """
     folder = get_default_keys_folder() if directory is None else directory
     cert_path = folder / 'certificate.pem'
     if not cert_path.exists():
@@ -185,6 +208,16 @@ def tcp_broadcast_tls_credentials(port, directory=None):
 
 
 def tcp_retrieve_tls_credentials(ip, port, directory=None):
+    """
+    Starts a client that retrieves certificate.pem over TCP.
+
+    The credential-broadcasting server must be launched via tcp_broadcast_tls_credentials on the Relay machine.
+
+    Args:
+        ip: ip of the credential-broadcasting server
+        port: port of the credential-broadcasting server
+        directory: directory where to write certificate.pem if not the default credentials directory
+    """
     folder = get_default_keys_folder() if directory is None else directory
     cert_path = folder / 'certificate.pem'
     print(f"Attempting to reach credentials server at address {ip}:{port}")

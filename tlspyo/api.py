@@ -11,6 +11,9 @@ from tlspyo.client import Client
 from tlspyo.utils import get_from_queue
 
 
+__docformat__ = "google"
+
+
 DEFAULT_SECURITY = "TLS"
 DEFAULT_SERIALIZER = pkl.dumps
 DEFAULT_DESERIALIZER = pkl.loads
@@ -28,27 +31,31 @@ class Relay:
                  serializer=None,
                  deserializer=None):
         """
-        `tlspyo` Relay.
+        ``tlspyo`` Relay.
 
         Endpoints connect to a central Relay, which allows them to communicate in `tlspyo`.
         When used on the Internet, the machine running the Relay must be directly visible from the Internet.
         (Usually, if the machine is behind an Internet box/router, this involves port forwarding.)
-        PLEASE CAREFULLY READ THE SECURITY INSTRUCTIONS WHEN USING `tlspyo` ON THE INTERNET.
-        In particular, you will want to choose a strong password, and ideally use your own TLS certificate.
+        WHEN USING `tlspyo` ON THE INTERNET, IT IS IMPORTANT TO USE TLS SECURITY (default).
+        In particular, you will want to choose a strong password, and use your own TLS credentials.
+        See the Command Line Interface section of the documentation to generate your TLS credentials.
 
-        :param port: int: port of the Relay
-        :param password: password of the Relay
-        :param accepted_groups: object (default: None): groups accepted by the Relay
-            If None, the Relay accepts any group;
-            Else, must be a dictionary where keys are groups and values are dictionaries with the following entries:
-                - 'max_count': max number of connected clients in the group (None for unlimited)
-                - 'max_consumables': max number of pending consumables in the group (None for unlimited)
-        :param local_com_port: int: local port used for internal communication with Twisted.
-        :param header_size: int: bytes to read at once from socket buffers (the default should work for most cases)
-        :param security: str: one of (None, "TLS");
-            None disables TLS, do not use None on a public network unless you know what you are doing!
-        :param serializer: callable: custom serializer that outputs a bytestring from a python object
-        :param serializer: callable: custom deserializer that outputs a python object from a bytestring
+        Args:
+            port (int): port of the Relay
+            password (str): password of the Relay
+            accepted_groups (object): groups accepted by the Relay.
+                If None, the Relay accepts any group;
+                Else, must be a dictionary where keys are groups and values are dictionaries with the following entries:
+
+                    - 'max_count': max number of connected clients in the group (None for unlimited)
+                    - 'max_consumables': max number of pending consumables in the group (None for unlimited)
+
+            local_com_port (int): local port used for internal communication with Twisted.
+            header_size (int): bytes to read at once from socket buffers (the default should work for most cases)
+            security (str): one of (None, "TLS");
+                None disables TLS, do not use None on a public network unless you know what you are doing!
+            serializer (callable): custom serializer that outputs a bytestring from a python object
+            deserializer (callable): custom deserializer that outputs a python object from a bytestring
         """
 
         assert security in (None, "TLS"), f"Unsupported security: {security}"
@@ -95,6 +102,9 @@ class Relay:
         self._local_com_conn.sendall(msg)
 
     def stop(self):
+        """
+        Stop the Relay.
+        """
         if not self._stopped:
             self._stopped = True
             self._send_local('STOP')
@@ -120,25 +130,24 @@ class Endpoint:
                  serializer=None,
                  deserializer=None):
         """
-        tlspyo Endpoint.
+        ``tlspyo`` Endpoint.
 
-        Endpoints in tlspyo are python objects that can securely send and receive Python object over the internet.
+        Endpoints in tlspyo are python objects that can securely send and receive Python object over the network.
+        They communicate via the Relay, and should use TLS security (default) on public networks.
+        See the Command Line Interface section of the documentation to generate your TLS credentials.
 
-        DISCLAIMER: We are not a security company, and we cannot guarantee that tlspyo is not hackable.
-        However, we believe tlspyo is fairly secure, as long as you use your own TLS certificate and a strong password.
-        IT IS IMPORTANT THAT YOU USE A STRONG PASSWORD WHEN YOUR MACHINE IS DIRECTLY VISIBLE FROM THE INTERNET.
-
-        :param ip_server: str: the IP address of the Relay (set to '127.0.0.1' for local testing)
-        :param port: int: the port of the Relay (use the same number for the Relay, it must be > 1024)
-        :param password: str: password of the Relay (use the same for the Relay, the stronger, the better)
-        :param groups: tuple of str, or str (default: None): groups in which this Endpoint is
-        :param local_com_port: local port used for internal communication with Twisted
-        :param header_size: int: number of bytes used for the header (the default should be OK for most cases)
-        :param max_buf_len: int: max bytes to read at once from socket buffers (the default should be OK for most cases)
-        :param security: str: one of (None, "TLS");
-            None disables TLS, do not use None on a public network unless you know what you are doing!
-        :param serializer: callable: custom serializer that outputs a bytestring from a python object
-        :param serializer: callable: custom deserializer that outputs a python object from a bytestring
+        Args:
+            ip_serve (str): the IP address of the Relay (set to '127.0.0.1' for local testing)
+            port (int): the port of the Relay (use the same number for the Relay, it must be > 1024)
+            password (str): password of the Relay (use the same for the Relay, the stronger, the better)
+            groups (tuple of str, or str): groups in which this Endpoint is
+            local_com_port (int): local port used for internal communication with Twisted
+            header_size (int): number of bytes used for the header (the default should be OK for most cases)
+            max_buf_len (int): max bytes to read at once from socket buffers (the default should be OK for most cases)
+            security (str): one of (None, "TLS");
+                None disables TLS, do not use None on a public network unless you know what you are doing!
+            serializer (callable): custom serializer that outputs a bytestring from a python object
+            deserializer (callable): custom deserializer that outputs a python object from a bytestring
         """
 
         assert security in (None, "TLS"), f"Unsupported security: {security}"
@@ -233,19 +242,23 @@ class Endpoint:
         Either broadcast object to destination group(s) or send it as a consumable.
 
         obj can be any picklable python object.
+
         destination can either be:
             - a string (single group)
             - a tuple of strings (set of groups)
             - a dictionary where keys are strings (group) and values are integers (number of copies for the group)
 
         When destination is a string or a tuple of strings, the object will be broadcast to corresponding group(s).
-        When destination is a dictionary, each key is a destination group. For each corresponding value:
-            - If the value is N < 0, the object is broadcast to the group.
-            - If the value is N > 0, N objects are sent to the group to be consumed. To consume an object, the Endpoint
-                first needs to signal itself as idle for the corresponding group with Endpoint.notify().
 
-        :param obj: object: picklable object to broadcast to destination
-        :param destination: object: destination group(s)
+        When destination is a dictionary, each key is a destination group.
+
+        For each corresponding value:
+            - if the value is N < 0, the object is broadcast to the group
+            - if the value is N > 0, N objects are sent to the group to be consumed. To consume an object, the Endpoint first needs to signal itself as idle for the corresponding group with Endpoint.notify().
+
+        Args:
+            obj (object): object to broadcast to destination
+            destination (object): destination group(s)
         """
         if isinstance(destination, str):
             destination = {destination: -1}
@@ -263,15 +276,18 @@ class Endpoint:
         """
         Alias for send_object(obj=obj, destination={group: 1}).
 
-        :param obj: object: object to send as consumable
-        :param group: str: target group
+        Args:
+            obj (object): object to send as consumable
+            group (str): target group
         """
         assert isinstance(group, str), f"group must be a string, not {type(group)}"
         self.send_object(obj=obj, destination={group: 1})
 
     def broadcast(self, obj, group):
         """Alias for send_object(obj=obj, destination={group: -1})
+
         Note that broadcasting an object overrides the previous brodcast object
+
         Args:
             obj (object): object to send to be broadcast to entire group
             group (str): destination group to which the object should be broadcast.
@@ -289,13 +305,16 @@ class Endpoint:
             - a dictionary where keys are strings (group) and values are integers (number of consumables from the group)
 
         When groups is a string or a tuple of strings, 1 consumable will be retrieved per corresponding group(s).
-        When groups is a dictionary, each key is a destination group. For each corresponding value:
-            - If the value is N < 0, all available consumables are retrieved from the group.
-            - If the value is N > 0, at most N available consumables are retrieved from the group.
+        When groups is a dictionary, each key is a destination group.
+
+        For each corresponding value:
+            - if the value is N < 0, all available consumables are retrieved from the group
+            - if the value is N > 0, at most N available consumables are retrieved from the group
 
         In any case, the group strings must be a subset of the Endpoint's groups.
 
-        :param groups: object: destination groups of the consumables.
+        Args:
+            groups (object): destination groups of the consumables.
         """
         if isinstance(groups, str):
             groups = {groups: 1}
@@ -310,6 +329,9 @@ class Endpoint:
         self._send_local(cmd='NTF', dest=groups, obj=None)
 
     def stop(self):
+        """
+        Stop the Endpoint.
+        """
         if not self._stopped:
             self._stopped = True
             # send STOP to the local server
@@ -331,8 +353,11 @@ class Endpoint:
         """
         Returns all received objects in a list, from oldest to newest.
 
-        :param blocking: bool: If True, the call blocks until objects are available. Otherwise, the list may be empty.
-        :return: list: received objects
+        Args:
+            blocking (bool): If True, the call blocks until objects are available. Otherwise, the list may be empty.
+
+        Returns:
+            list: received objects
         """
         cpy = []
         elem = get_from_queue(self.__obj_buffer, blocking)
@@ -347,10 +372,13 @@ class Endpoint:
 
         Items are returned from older to more recent.
 
-        :param max_items: int: max number of retrieved items.
-        :param blocking: bool: If True, the call blocks until at least 1 item is retrieved.
-            Otherwise, the returned list may be empty.
-        :return: list: returned items.
+        Args:
+            max_items (int): max number of retrieved items.
+            blocking (bool): If True, the call blocks until at least 1 item is retrieved.
+                Otherwise, the returned list may be empty.
+
+        Returns:
+            list: returned items.
         """
         assert max_items > 0, "Value of max_items must be > 0"
 
@@ -372,11 +400,14 @@ class Endpoint:
         Calling this method clears the receiving buffer.
         In other words, only the most recent objects are retrieved, older objects in the buffer are deleted.
         In case this behavior is not desirable in your application, use `receive_all` or `pop` instead.
-        
-        :param max_items: int: maximum number of items to return
-        :param blocking: bool: If True, the call blocks until at least one item is retrieved.
-            Otherwise, the returned list may be empty.
-        :return: list: The returned items.
+
+        Args:
+            max_items (int): maximum number of items to return
+            blocking (bool): If True, the call blocks until at least one item is retrieved.
+                Otherwise, the returned list may be empty.
+
+        Returns:
+            list: The returned items.
         """
         cpy = []
         elem = get_from_queue(self.__obj_buffer, blocking)
