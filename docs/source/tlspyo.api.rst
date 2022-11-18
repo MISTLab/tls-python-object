@@ -2,5 +2,6 @@ tlspyo API (tlspyo.api module)
 ==============================
 
 .. automodule:: tlspyo.api
-   :members: Relay, Endpoint
+   :members:
+   :undoc-members:
    :show-inheritance:
