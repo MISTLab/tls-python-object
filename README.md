@@ -5,6 +5,8 @@
 **A library for secure transfer of python objects over network.**
 
 [![Python package](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml/badge.svg)](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml)
+[![Documentation Status](https://readthedocs.org/projects/tlspyo/badge/?version=latest)](https://tlspyo.readthedocs.io/en/latest/?badge=latest)
+
 
 `tlspyo` provides a simple API to transfer python objects in a robust and safe way via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), between several machines (and/or processes) called `Endpoints`.
 
@@ -25,6 +27,7 @@
   - [Producer-consumer example](#a-simple-producer-consumer-example)
 - [Security](#security)
 - [Custom serialization](#custom-serialization)
+- [API documentation](https://tlspyo.readthedocs.io/en/latest/)
 
 
 ## Principle
@@ -319,7 +322,7 @@ Once we are done, we can `stop` all `Endpoints`, and then the `Relay` for the sa
 
 There you go! You have now sent your first object over the network using `tlspyo`.
 
-Please check out the [API documentation](https://github.com/MISTLab/tls-python-object/blob/main/tlspyo/api.py) for more advanced usage.
+Please check out the [API documentation](https://tlspyo.readthedocs.io/en/latest/) for more advanced usage.
 
 ## Security
 
