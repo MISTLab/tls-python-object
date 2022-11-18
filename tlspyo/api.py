@@ -137,7 +137,7 @@ class Endpoint:
         See the Command Line Interface section of the documentation to generate your TLS credentials.
 
         Args:
-            ip_serve (str): the IP address of the Relay (set to '127.0.0.1' for local testing)
+            ip_server (str): the IP address of the Relay (set to '127.0.0.1' for local testing)
             port (int): the port of the Relay (use the same number for the Relay, it must be > 1024)
             password (str): password of the Relay (use the same for the Relay, the stronger, the better)
             groups (tuple of str, or str): groups in which this Endpoint is
