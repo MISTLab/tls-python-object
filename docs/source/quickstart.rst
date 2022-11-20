@@ -29,7 +29,7 @@ On all your "client" machines:
 
 .. code-block:: bash
 
-   python -m tlspyo --retrieve ip=<server ip>
+   python -m tlspyo --retrieve --ip=<server ip>
 
 On your "server" machine:
 -------------------------
@@ -45,7 +45,7 @@ On your "server" machine:
    if __name__=="__main__":
 
        my_relay = Relay(
-            port=6667,
+            port=7776,
             password="<password>",  # replace <password> by a strong password of your choice
             local_com_port=3001
        )
@@ -69,7 +69,7 @@ On your "client" machines:
 
        my_endpoint = Endpoint(
        ip_server='<ip server>', # replace <ip server> by the ip of your server machine
-       port=6667,
+       port=7776,
        password="<password>",  # same password as the Relay
        groups=groups,
        local_com_port=free_port
