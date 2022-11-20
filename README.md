@@ -7,7 +7,8 @@
 [![Python package](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml/badge.svg)](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml)
 [![Documentation Status](https://readthedocs.org/projects/tlspyo/badge/?version=latest)](https://tlspyo.readthedocs.io/en/latest/?badge=latest)
 
-:rocket: [Quickstart guide and API documentation](https://tlspyo.readthedocs.io/en/latest/)
+:rocket: [Quickstart guide](https://tlspyo.readthedocs.io/en/latest/quickstart.html)
+:scroll: [API documentation](https://tlspyo.readthedocs.io/en/latest/)
 
 `tlspyo` provides a simple API to transfer python objects in a robust and safe way via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), between several machines (and/or processes) called `Endpoints`.
 
