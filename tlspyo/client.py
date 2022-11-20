@@ -101,6 +101,10 @@ class TLSClientFactory(ReconnectingClientFactory):
         self._groups = client.groups
         self._header_size = client.header_size
         self._client = client
+        self.maxDelay = self._client.recon_max_delay
+        self.initialDelay = self._client.recon_initial_delay
+        self.factor = self._client.recon_factor
+        self.jitter = self._client.recon_jitter
 
     def startedConnecting(self, connector):
         logger.info('Started to connect.')
@@ -134,7 +138,11 @@ class Client:
                  local_com_port=2097,
                  security="TLS",
                  keys_dir=None,
-                 hostname='default'):
+                 hostname='default',
+                 recon_max_delay=60.0,
+                 recon_initial_delay=10.0,
+                 recon_factor=1.5,
+                 recon_jitter=0.1):
 
         self.serializer = serializer
         self.deserializer = deserializer
@@ -154,6 +162,10 @@ class Client:
         self._security = security
         self._keys_dir = keys_dir
         self._hostname = hostname
+        self.recon_max_delay = recon_max_delay
+        self.recon_initial_delay = recon_initial_delay
+        self.recon_factor = recon_factor
+        self.recon_jitter = recon_jitter
 
     def run(self):
         """

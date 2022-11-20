@@ -128,7 +128,11 @@ class Endpoint:
                  keys_dir: str = None,
                  hostname: str = "default",
                  serializer=None,
-                 deserializer=None):
+                 deserializer=None,
+                 recon_max_delay=60.0,
+                 recon_initial_delay=10.0,
+                 recon_factor=1.5,
+                 recon_jitter=0.1):
         """
         ``tlspyo`` Endpoint.
 
@@ -148,6 +152,10 @@ class Endpoint:
                 None disables TLS, do not use None on a public network unless you know what you are doing!
             serializer (callable): custom serializer that outputs a bytestring from a python object
             deserializer (callable): custom deserializer that outputs a python object from a bytestring
+            recon_max_delay (float): in case of network failure, maximum delay between reconnection attempts
+            recon_initial_delay (float): in case of network failure, initial delay between reconnection attempts
+            recon_factor (float): in case of network failure, delay will increase by this factor between attempts
+            recon_jitter (float): in case of network failure, jitter factor of the delay between attempts
         """
 
         assert security in (None, "TLS"), f"Unsupported security: {security}"
@@ -187,7 +195,11 @@ class Endpoint:
                               header_size=header_size,
                               security=security,
                               keys_dir=keys_dir,
-                              hostname=hostname)
+                              hostname=hostname,
+                              recon_max_delay=recon_max_delay,
+                              recon_initial_delay=recon_initial_delay,
+                              recon_factor=recon_factor,
+                              recon_jitter=recon_jitter)
 
         # start local server and Twisted process
         self._local_com_srv.bind(('127.0.0.1', self._local_com_port))

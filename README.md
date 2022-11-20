@@ -2,11 +2,12 @@
 
 :computer: :globe_with_meridians: :computer:
 
-**A library for secure transfer of python objects over network.**
+**A library for easy and secure transfer of python objects over network.**
 
 [![Python package](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml/badge.svg)](https://github.com/MISTLab/tls-python-object/actions/workflows/python-package.yml)
 [![Documentation Status](https://readthedocs.org/projects/tlspyo/badge/?version=latest)](https://tlspyo.readthedocs.io/en/latest/?badge=latest)
 
+:rocket: [Quickstart guide and API documentation](https://tlspyo.readthedocs.io/en/latest/)
 
 `tlspyo` provides a simple API to transfer python objects in a robust and safe way via [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), between several machines (and/or processes) called `Endpoints`.
 
@@ -19,6 +20,7 @@
 
 ## Quick links
 
+- [Documentation](https://tlspyo.readthedocs.io/en/latest/)
 - [Principle](#principle)
 - [Example usage](#example-usage)
 - [Getting started](#getting-started)
@@ -27,7 +29,6 @@
   - [Producer-consumer example](#a-simple-producer-consumer-example)
 - [Security](#security)
 - [Custom serialization](#custom-serialization)
-- [API documentation](https://tlspyo.readthedocs.io/en/latest/)
 
 
 ## Principle
