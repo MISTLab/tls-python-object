@@ -32,4 +32,4 @@ jobs:
         python -m tlspyo --generate
     - name: Test with pytest
       run: |
-        pytest --timeout=10
+        pytest --timeout=20

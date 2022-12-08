@@ -129,8 +129,8 @@ class TestGroups(unittest.TestCase):
 
         # test multiple producing / consuming
 
-        ep5.send_object(obj='test12', destination={'group1': 10})  # this produces to group 1 and 2
-        ep5.send_object(obj='test13', destination={'group2': 10})  # this produces to group 1 and 2
+        ep5.send_object(obj='test12', destination={'group1': 10})  # this produces to group 1
+        ep5.send_object(obj='test13', destination={'group2': 10})  # this produces to group 2
         ep2.notify(groups={'group1': 1})  # retrieve 1 elt in group 1
         r = []
         while len(r) < 11:  # one consumable in group1 and all consumables is group 2
