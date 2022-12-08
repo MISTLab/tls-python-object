@@ -69,7 +69,7 @@ if __name__ == "__main__":
         port=3000,  # must be same port as the Relay
         password="VerySecurePassword",  # must be same (strong) password as the Relay
         groups="producers",  # this endpoint is part of the group "producers"
-        local_com_port=3002  # must be unique
+        local_com_port=3002
     )
 
     # Create a bunch of other Endpoints in group "consumers" (arbitrary name)
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         port=3000,
         password="VerySecurePassword",
         groups="consumers",  # this endpoint is part of group "consumers"
-        local_com_port=3003  # must be unique
+        local_com_port=3003
     )
 
     cons_2 = Endpoint(
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         port=3000,
         password="VerySecurePassword",
         groups="consumers",  # this endpoint is part of group "consumers"
-        local_com_port=3004,  # must be unique
+        local_com_port=3004,
     )
 
     # Producer broadcasts an object to any and all endpoint in the destination group "consumers"
@@ -103,11 +103,11 @@ if __name__ == "__main__":
     res = []
     while len(res) < 2:
         res += cons_1.receive_all(blocking=True)
-    print(f"Consumer 1 has received: {res}") # Print the first (and only) result from the local queue
+    print(f"Consumer 1 has received: {res}")
 
     # Consumer 2 is able to retrieve only the broadcast object:
     res = cons_2.receive_all(blocking=True)
-    print(f"Consumer 2 has received: {res}")  # Print the first (and only) result from the local queue
+    print(f"Consumer 2 has received: {res}")
 
     # Let us close everyone gracefully:
     prod.stop()
@@ -301,11 +301,11 @@ Now, let our consumers retrieve their loot:
  res = []
  while len(res) < 2:
      res += cons_1.receive_all(blocking=True)
- print(f"Consumer 1 has received: {res}") # Print the first (and only) result from the local queue
+ print(f"Consumer 1 has received: {res}")
 
  # Consumer 2 is able to retrieve only the broadcast object:
  res = cons_2.receive_all(blocking=True)
- print(f"Consumer 2 has received: {res}")  # Print the first (and only) result from the local queue
+ print(f"Consumer 2 has received: {res}")
 ```
  which prints:
 ```terminal
