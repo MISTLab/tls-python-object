@@ -341,7 +341,7 @@ Please submit a detailed issue if you are aware of any important exploit not cov
 
 :warning: Objects transferred by `tlspyo` are serialized with `pickle` by default, so that you can transfer most python objects easily.
 
-If you use `tlspyo` (or any similar approach) on a machine that is visible from a public network, failing to follow the security instructions provided thereafter could make you vulnerable to [dangerous exploits](https://davidhamann.de/2020/04/05/exploiting-python-pickle/).
+NEVER TRANSFER PICKLED OBJECTS OVER A PUBLIC NETWORK WITHOUT `tlspyo`, as this would make you vulnerable to [dangerous exploits](https://davidhamann.de/2020/04/05/exploiting-python-pickle/).
 This is because unpickling untrusted pickled objects (i.e., pickled objects created by a malicious user) can lead to arbitrary code execution on your machine.
 
 To prevent this from happening, `tlspyo` provides two interdependent layers of security:
@@ -355,7 +355,9 @@ This ensures that anyone posing as an endpoint will never be able to send undesi
 If a malicious user successfully posed as your `Relay`, your `Endpoint` would send them messages that they could decrypt, including your password (this is prevented by TLS when using your own secret key and public certificate).
 If they successfully posed as your `Endpoint` they could send malicious pickled objects to your `Relay` (this is prevented by them not knowing your password).
 
-In a nutshell, you want your password to be as strong as possible, and your TLS secret key to be kept... well, secret :lock:
+In a nutshell, **when using `tlspyo` you want your password to be as strong as possible, and your TLS secret key to be kept... well, secret** :lock:
+
+For safety-critical applications, we recommend you ditch `pickle` altogether and instead code a secure custom serialization protocol, on top of the TLS layer provided by `tlspyo`.
 
 ## Custom serialization
 
