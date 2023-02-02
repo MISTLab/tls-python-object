@@ -364,7 +364,7 @@ For safety-critical applications, we recommend you ditch `pickle` altogether and
 By default, `tlspyo` uses `pickle` for serialization and relies on TLS to prevent attacks.
 
 In advanced application, you may want to use another serialization protocol instead.
-For instance, you may want to transfer non-picklable objects, or further optimize the security of your application.
+For instance, you may want to transfer non-picklable objects, further optimize the security of your application, or simply use a `pickle` serialization protocol or your choice instead of your Python's default.
 
 **In particular, in `security=None` mode (i.e., with TLS disabled) over a public network, using your own secure serialization protocol is critical.**
 
@@ -378,7 +378,7 @@ from tlspyo import Relay, Endpoint
 
 # We define a custom serialization protocol based on pickle for simplicity.
 # Of course, this is only for illustration.
-# You probably do not want to use pickle in practice here.
+# In practice, you may not want to use pickle here.
 
 
 def my_custom_serializer(obj):
