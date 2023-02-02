@@ -15,7 +15,7 @@ with open("README.md", "r") as fh:
 setup(name='tlspyo',
       packages=[package for package in find_packages()],
       version='0.2.4',
-      download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.2.3.tar.gz',
+      download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.2.4.tar.gz',
       license='MIT',
       description='Secure transport of python objects using TLS encryption',
       long_description=long_description,
