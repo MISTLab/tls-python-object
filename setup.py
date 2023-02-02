@@ -14,7 +14,7 @@ with open("README.md", "r") as fh:
 
 setup(name='tlspyo',
       packages=[package for package in find_packages()],
-      version='0.2.3',
+      version='0.2.4',
       download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.2.3.tar.gz',
       license='MIT',
       description='Secure transport of python objects using TLS encryption',
@@ -25,7 +25,7 @@ setup(name='tlspyo',
       keywords=['python', 'tls', 'ssl', 'pickle', 'transfer', 'object', 'transport', 'twisted'],
       install_requires=[
         'twisted',
-        'pyOpenSSL',
+        'pyOpenSSL>22.1.0',
         'service_identity',
         'platformdirs'
         ],
