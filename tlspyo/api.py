@@ -132,7 +132,8 @@ class Endpoint:
                  recon_max_delay=60.0,
                  recon_initial_delay=10.0,
                  recon_factor=1.5,
-                 recon_jitter=0.1):
+                 recon_jitter=0.1,
+                 deserializer_mode="asynchronous"):
         """
         ``tlspyo`` Endpoint.
 
@@ -156,6 +157,12 @@ class Endpoint:
             recon_initial_delay (float): in case of network failure, initial delay between reconnection attempts
             recon_factor (float): in case of network failure, delay will increase by this factor between attempts
             recon_jitter (float): in case of network failure, jitter factor of the delay between attempts
+            deserializer_mode (str): one of ("synchronous", "asynchronous"); ("sync", "async") are also accepted;
+                in asynchronous mode, objects are deserialized by the receiver thread as soon as they arrive, such that
+                they become available to the calling thread as soon as it needs to retrieve them;
+                in synchronous mode, objects are deserialized by the calling thread upon object retrieval;
+                synchronous mode removes the need for potentially useless, randomly timed deserialization in the
+                background, at the cost of performing deserialization upon object retrieval instead
         """
 
         assert security in (None, "TLS"), f"Unsupported security: {security}"
@@ -180,6 +187,8 @@ class Endpoint:
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
         self._local_com_srv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+
+        self._deserialize_locally = deserializer_mode in ("synchronous", "sync")
 
         keys_dir = os.path.abspath(keys_dir) if keys_dir is not None else keys_dir
         serializer = serializer if serializer is not None else DEFAULT_SERIALIZER
@@ -215,6 +224,9 @@ class Endpoint:
     def __del__(self):
         self.stop()
 
+    def _deserialize(self, obj):
+        return self._client.deserializer(obj)
+
     def _manage_received_objects(self):
         """
         Called in its own thread.
@@ -230,9 +242,10 @@ class Endpoint:
             buf += self._local_com_conn.recv(self._max_buf_len)
             i, j = self._process_header(buf)
             while j <= len(buf):
-                stamp, cmd, obj = self._client.deserializer(buf[i:j])
+                stamp, cmd, obj = self._deserialize(buf[i:j])
                 if cmd == "OBJ":
-                    self.__obj_buffer.put(self._client.deserializer(obj))  # TODO: maxlen
+                    to_put = obj if self._deserialize_locally else self._deserialize(obj)
+                    self.__obj_buffer.put(to_put)  # TODO: maxlen
                 buf = buf[j:]
                 i, j = self._process_header(buf)
 
@@ -361,6 +374,12 @@ class Endpoint:
             self._local_com_srv.close()
             self._local_com_addr = None
 
+    def _process_received_list(self, received_list):
+        if self._deserialize_locally:
+            for i, obj in enumerate(received_list):
+                received_list[i] = self._deserialize(obj)
+        return received_list
+
     def receive_all(self, blocking=False):
         """
         Returns all received objects in a list, from oldest to newest.
@@ -376,6 +395,7 @@ class Endpoint:
         while len(elem) > 0:
             cpy += elem
             elem = get_from_queue(self.__obj_buffer, blocking=False)
+        cpy = self._process_received_list(cpy)
         return cpy
 
     def pop(self, max_items=1, blocking=False):
@@ -402,6 +422,7 @@ class Endpoint:
             if len(cpy) >= max_items:
                 break
             elem = get_from_queue(self.__obj_buffer, blocking=False)
+        cpy = self._process_received_list(cpy)
         return cpy
 
     def get_last(self, max_items=1, blocking=False):
@@ -427,4 +448,5 @@ class Endpoint:
         while len(elem) > 0:
             cpy += elem
             elem = get_from_queue(self.__obj_buffer, blocking=False)
-        return cpy[-max_items:]
+        cpy = self._process_received_list(cpy[-max_items:])
+        return cpy

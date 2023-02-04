@@ -9,12 +9,13 @@ TEST_HEADER_SIZE = 12
 
 
 class HelperTester:
-    def __init__(self, serializer=None, deserializer=None):
+    def __init__(self, serializer=None, deserializer=None, deserializer_mode="asynchronous"):
         self.next_local_port = TEST_LOCAL_PORT_START
         self.endpoints = []
         self.relays = []
         self.serializer = serializer
         self.deserializer = deserializer
+        self.deserializer_mode = deserializer_mode
 
     def spawn_endpoint(self, groups):
         ep = Endpoint(
@@ -25,7 +26,8 @@ class HelperTester:
             local_com_port=self.next_local_port,
             header_size=TEST_HEADER_SIZE,
             serializer=self.serializer,
-            deserializer=self.deserializer
+            deserializer=self.deserializer,
+            deserializer_mode=self.deserializer_mode
         )
         self.next_local_port += 1
         self.endpoints.append(ep)

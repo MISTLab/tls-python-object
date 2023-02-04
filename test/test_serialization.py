@@ -30,7 +30,7 @@ def custom_deserializer(bytestring):
     return obj
 
 
-class TestGroups(unittest.TestCase):
+class TestSerialization(unittest.TestCase):
 
     # Set up the server and all endpoints for all tests
     def setUp(self):
