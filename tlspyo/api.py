@@ -4,6 +4,7 @@ import pickle as pkl
 from threading import Thread, Lock
 from multiprocessing import Process
 import os
+import weakref
 
 from tlspyo.server import Server
 from tlspyo.client import Client
@@ -93,7 +94,9 @@ class Relay:
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
         self._send_local('TEST')
 
-    def __del__(self):
+        self._finalizer = weakref.finalize(self, self._finalize)
+
+    def _finalize(self):
         self.stop()
 
     def _send_local(self, cmd):
@@ -105,14 +108,17 @@ class Relay:
         """
         Stop the Relay.
         """
-        if not self._stopped:
-            self._stopped = True
-            self._send_local('STOP')
+        try:
+            if not self._stopped:
+                self._send_local('STOP')
 
-            self._p.join()
-            self._local_com_conn.close()
-            self._local_com_srv.close()
-            self._local_com_addr = None
+                self._p.join()
+                self._local_com_conn.close()
+                self._local_com_srv.close()
+                self._local_com_addr = None
+                self._stopped = True
+        except KeyboardInterrupt:
+            self.stop()
 
 
 class Endpoint:
@@ -218,10 +224,12 @@ class Endpoint:
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
         self._send_local(cmd='TEST')
 
-        self._t_manage_received_objects = Thread(target=self._manage_received_objects, daemon=True)
+        self._t_manage_received_objects = Thread(target=self._manage_received_objects, daemon=False)
         self._t_manage_received_objects.start()
 
-    def __del__(self):
+        self._finalizer = weakref.finalize(self, self._finalize)
+
+    def _finalize(self):
         self.stop()
 
     def _deserialize(self, obj):
@@ -231,23 +239,25 @@ class Endpoint:
         """
         Called in its own thread.
         """
-        buf = b""
-        while True:
-            # Check if socket is still open
-            with self.__socket_closed_lock:
-                if self.__socket_closed_flag:
-                    self._local_com_conn.close()
-                    return
+        try:
+            buf = b""
+            while True:
+                # Check if socket is still open
+                with self.__socket_closed_lock:
+                    if self.__socket_closed_flag:
+                        return
 
-            buf += self._local_com_conn.recv(self._max_buf_len)
-            i, j = self._process_header(buf)
-            while j <= len(buf):
-                stamp, cmd, obj = self._deserialize(buf[i:j])
-                if cmd == "OBJ":
-                    to_put = obj if self._deserialize_locally else self._deserialize(obj)
-                    self.__obj_buffer.put(to_put)  # TODO: maxlen
-                buf = buf[j:]
+                buf += self._local_com_conn.recv(self._max_buf_len)
                 i, j = self._process_header(buf)
+                while j <= len(buf):
+                    stamp, cmd, obj = self._deserialize(buf[i:j])
+                    if cmd == "OBJ":
+                        to_put = obj if self._deserialize_locally else self._deserialize(obj)
+                        self.__obj_buffer.put(to_put)  # TODO: maxlen
+                    buf = buf[j:]
+                    i, j = self._process_header(buf)
+        finally:
+            self._local_com_conn.close()
 
     def _process_header(self, buf):
         i = self._header_size
@@ -357,22 +367,25 @@ class Endpoint:
         """
         Stop the Endpoint.
         """
-        if not self._stopped:
-            self._stopped = True
-            # send STOP to the local server
-            self._send_local(cmd='STOP', dest=None, obj=None)
+        try:
+            if not self._stopped:
+                # send STOP to the local server
+                self._send_local(cmd='STOP', dest=None, obj=None)
 
-            # Join the message reading thread
-            with self.__socket_closed_lock:
-                self.__socket_closed_flag = True
-            self._t_manage_received_objects.join()
+                # Join the message reading thread
+                with self.__socket_closed_lock:
+                    self.__socket_closed_flag = True
+                self._t_manage_received_objects.join()
 
-            # join Twisted process and stop local server
-            self._p.join()
+                # join Twisted process and stop local server
+                self._p.join()
 
-            self._local_com_conn.close()
-            self._local_com_srv.close()
-            self._local_com_addr = None
+                self._local_com_conn.close()
+                self._local_com_srv.close()
+                self._local_com_addr = None
+                self._stopped = True
+        except KeyboardInterrupt:
+            self.stop()
 
     def _process_received_list(self, received_list):
         if self._deserialize_locally:
