@@ -26,7 +26,7 @@ setup(name='tlspyo',
       install_requires=[
         'twisted',
         'pyOpenSSL>22.1.0',
-        'service_identity',
+        'service_identity==21.1.0',
         'platformdirs'
         ],
       extras_requires={
