@@ -68,7 +68,6 @@ class Relay:
 
         assert accepted_groups is None or isinstance(accepted_groups, dict), "Invalid format for accepted_groups."
 
-        self._stopped = False
         self._header_size = header_size
         self._local_com_port = local_com_port
         self._local_com_srv = socket(AF_INET, SOCK_STREAM)
@@ -95,6 +94,8 @@ class Relay:
         self._send_local('TEST')
 
         self._finalizer = weakref.finalize(self, self._finalize)
+        self._stop_lock = Lock()
+        self._stopped = False
 
     def _finalize(self):
         self.stop()
@@ -109,16 +110,18 @@ class Relay:
         Stop the Relay.
         """
         try:
-            if not self._stopped:
-                self._send_local('STOP')
+            with self._stop_lock:
+                if not self._stopped:
+                    self._send_local('STOP')
 
-                self._p.join()
-                self._local_com_conn.close()
-                self._local_com_srv.close()
-                self._local_com_addr = None
-                self._stopped = True
-        except KeyboardInterrupt:
+                    self._p.join()
+                    self._local_com_conn.close()
+                    self._local_com_srv.close()
+                    self._local_com_addr = None
+                    self._stopped = True
+        except KeyboardInterrupt as e:
             self.stop()
+            raise e
 
 
 class Endpoint:
@@ -178,8 +181,6 @@ class Endpoint:
         elif security == "SSL":
             security = "TLS"
 
-        self._stopped = False
-
         # threading for local object receiving
         self.__obj_buffer = queue.Queue()
         self.__socket_closed_lock = Lock() 
@@ -228,6 +229,8 @@ class Endpoint:
         self._t_manage_received_objects.start()
 
         self._finalizer = weakref.finalize(self, self._finalize)
+        self._stop_lock = Lock()
+        self._stopped = False
 
     def _finalize(self):
         self.stop()
@@ -368,24 +371,26 @@ class Endpoint:
         Stop the Endpoint.
         """
         try:
-            if not self._stopped:
-                # send STOP to the local server
-                self._send_local(cmd='STOP', dest=None, obj=None)
+            with self._stop_lock:
+                if not self._stopped:
+                    # send STOP to the local server
+                    self._send_local(cmd='STOP', dest=None, obj=None)
 
-                # Join the message reading thread
-                with self.__socket_closed_lock:
-                    self.__socket_closed_flag = True
-                self._t_manage_received_objects.join()
+                    # Join the message reading thread
+                    with self.__socket_closed_lock:
+                        self.__socket_closed_flag = True
+                    self._t_manage_received_objects.join()
 
-                # join Twisted process and stop local server
-                self._p.join()
+                    # join Twisted process and stop local server
+                    self._p.join()
 
-                self._local_com_conn.close()
-                self._local_com_srv.close()
-                self._local_com_addr = None
-                self._stopped = True
-        except KeyboardInterrupt:
+                    self._local_com_conn.close()
+                    self._local_com_srv.close()
+                    self._local_com_addr = None
+                    self._stopped = True
+        except KeyboardInterrupt as e:
             self.stop()
+            raise e
 
     def _process_received_list(self, received_list):
         if self._deserialize_locally:
