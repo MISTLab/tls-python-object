@@ -28,6 +28,7 @@ def generate_tls_credentials(
         folder_path,
         email_address="emailAddress",
         common_name="default",
+        subject_alt_name=('DNS:default',),
         country_name="CA",
         locality_name="localityName",
         state_or_province_name="stateOrProvinceName",
@@ -42,6 +43,7 @@ def generate_tls_credentials(
         folder_path (path-like object): path were the files will be created
         email_address (str): your email address
         common_name (str): your hostname
+        subject_alt_name (tuple of str): your subject alt name list
         country_name (str): your country code
         locality_name (str): your locality name
         state_or_province_name (str): your state name
@@ -57,18 +59,26 @@ def generate_tls_credentials(
     k = crypto.PKey()
     k.generate_key(crypto.TYPE_RSA, 4096)
     cert = crypto.X509()
-    cert.get_subject().C = country_name
-    cert.get_subject().ST = state_or_province_name
-    cert.get_subject().L = locality_name
-    cert.get_subject().O = organization_name
-    cert.get_subject().OU = organization_unit_name
-    cert.get_subject().CN = common_name
-    cert.get_subject().emailAddress = email_address
-    cert.set_serial_number(serial_number)
+
+    subject = cert.get_subject()
+    subject.commonName = common_name
+    subject.emailAddress = email_address
+    subject.organizationName = organization_name
+    subject.organizationalUnitName = organization_unit_name
+    subject.localityName = locality_name
+    subject.stateOrProvinceName = state_or_province_name
+    subject.countryName = country_name
+
+    cert.set_issuer(subject)
     cert.gmtime_adj_notBefore(0)
     cert.gmtime_adj_notAfter(validity_end_in_seconds)
-    cert.set_issuer(cert.get_subject())
     cert.set_pubkey(k)
+    cert.set_serial_number(serial_number)
+    cert.set_version(2)  # for SAN
+    cert.add_extensions([
+        crypto.X509Extension(b'subjectAltName', False, ','.join(subject_alt_name).encode())
+    ])
+
     cert.sign(k, 'sha512')
     with open(cert_file, "wt") as f:
         f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"))
@@ -87,6 +97,7 @@ def credentials_generator_tool(custom=False):
     folder_path = get_default_keys_folder()
     email_address = "emailAddress"
     common_name = "default"
+    subject_alt_name = ["DNS:" + common_name]
     country_name = "CA"
     locality_name = "localityName"
     state_or_province_name = "stateOrProvinceName"
@@ -117,6 +128,16 @@ def credentials_generator_tool(custom=False):
         if inp != "":
             common_name = inp
         print(common_name)
+
+        subject_alt_name = ["DNS:" + common_name]
+        print(f"\nSubject alternative name (hostnames, leave empty to stop adding) {subject_alt_name}:")
+        inp = input()
+        if inp != "":
+            subject_alt_name = []
+            while inp != "":
+                subject_alt_name.append(inp)
+                inp = input()
+        print(subject_alt_name)
 
         print(f"\nCountry code [{country_name}]:")
         inp = input()
@@ -163,6 +184,7 @@ def credentials_generator_tool(custom=False):
     generate_tls_credentials(folder_path=folder_path,
                              email_address=email_address,
                              common_name=common_name,
+                             subject_alt_name=tuple(subject_alt_name),
                              country_name=country_name,
                              locality_name=locality_name,
                              state_or_province_name=state_or_province_name,

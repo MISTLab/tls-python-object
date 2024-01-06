@@ -1,8 +1,6 @@
 from setuptools import setup, find_packages
 import sys
 
-from pathlib import Path
-
 
 if sys.version_info < (3, 7):
     sys.exit('Sorry, Python < 3.7 is not supported, upgrade your python installation to use tlspyo.')
@@ -14,8 +12,8 @@ with open("README.md", "r") as fh:
 
 setup(name='tlspyo',
       packages=[package for package in find_packages()],
-      version='0.2.5',
-      download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.2.5.tar.gz',
+      version='0.3.0',
+      download_url='https://github.com/MISTLab/tls-python-object/archive/refs/tags/v0.3.0.tar.gz',
       license='MIT',
       description='Secure transport of python objects using TLS encryption',
       long_description=long_description,

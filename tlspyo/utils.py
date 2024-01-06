@@ -1,11 +1,11 @@
-import signal
+# import signal
 import queue
 
 
-try:
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-except Exception as e:
-    pass
+# try:
+#     signal.signal(signal.SIGINT, signal.SIG_DFL)
+# except Exception as e:
+#     pass
 
 
 def wait_event(event):
