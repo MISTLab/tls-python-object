@@ -4,7 +4,6 @@ import pickle as pkl
 from threading import Thread, Lock
 from multiprocessing import Process
 import os
-import weakref
 
 from tlspyo.server import Server
 from tlspyo.client import Client
@@ -93,11 +92,10 @@ class Relay:
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
         self._send_local('TEST')
 
-        self._finalizer = weakref.finalize(self, self._finalize)
         self._stop_lock = Lock()
         self._stopped = False
 
-    def _finalize(self):
+    def __del__(self):
         self.stop()
 
     def _send_local(self, cmd):
@@ -225,14 +223,13 @@ class Endpoint:
         self._local_com_conn, self._local_com_addr = self._local_com_srv.accept()
         self._send_local(cmd='TEST')
 
-        self._t_manage_received_objects = Thread(target=self._manage_received_objects, daemon=False)
+        self._t_manage_received_objects = Thread(target=self._manage_received_objects, daemon=True)
         self._t_manage_received_objects.start()
 
-        self._finalizer = weakref.finalize(self, self._finalize)
         self._stop_lock = Lock()
         self._stopped = False
 
-    def _finalize(self):
+    def __del__(self):
         self.stop()
 
     def _deserialize(self, obj):
@@ -242,25 +239,22 @@ class Endpoint:
         """
         Called in its own thread.
         """
-        try:
-            buf = b""
-            while True:
-                # Check if socket is still open
-                with self.__socket_closed_lock:
-                    if self.__socket_closed_flag:
-                        return
+        buf = b""
+        while True:
+            # Check if socket is still open
+            with self.__socket_closed_lock:
+                if self.__socket_closed_flag:
+                    return
 
-                buf += self._local_com_conn.recv(self._max_buf_len)
+            buf += self._local_com_conn.recv(self._max_buf_len)
+            i, j = self._process_header(buf)
+            while j <= len(buf):
+                stamp, cmd, obj = self._deserialize(buf[i:j])
+                if cmd == "OBJ":
+                    to_put = obj if self._deserialize_locally else self._deserialize(obj)
+                    self.__obj_buffer.put(to_put)  # TODO: maxlen
+                buf = buf[j:]
                 i, j = self._process_header(buf)
-                while j <= len(buf):
-                    stamp, cmd, obj = self._deserialize(buf[i:j])
-                    if cmd == "OBJ":
-                        to_put = obj if self._deserialize_locally else self._deserialize(obj)
-                        self.__obj_buffer.put(to_put)  # TODO: maxlen
-                    buf = buf[j:]
-                    i, j = self._process_header(buf)
-        finally:
-            self._local_com_conn.close()
 
     def _process_header(self, buf):
         i = self._header_size
